@@ -1,4 +1,4 @@
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK = 'https://hook.app.workfrontfusion.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 
 /** Resolve webhook URL */
 function resolveWebhook() {
@@ -26,14 +26,25 @@ function deepFindUserEmail(root = document) {
   return null;
 }
 
-/** Resolve submitter identity */
-function resolveSubmitter() {
-  return (
-    window.SFR_USER ||
-    document.querySelector('meta[name="sfr:user"]')?.content ||
-    deepFindUserEmail() ||
-    'anonymous'
-  );
+/** Resolve submitter identity with retry loop */
+async function resolveSubmitter(maxWait = 3000) {
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const check = () => {
+      const email =
+        window.SFR_USER ||
+        document.querySelector('meta[name="sfr:user"]')?.content ||
+        deepFindUserEmail();
+      if (email) {
+        return resolve(email);
+      }
+      if (Date.now() - start > maxWait) {
+        return resolve('anonymous');
+      }
+      setTimeout(check, 300);
+    };
+    check();
+  });
 }
 
 /** Collect authored page context */
@@ -64,13 +75,13 @@ function getContext() {
 }
 
 /** Build full payload */
-function buildPayload(ctx) {
+async function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = resolveSubmitter();
+  const submittedBy = await resolveSubmitter();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
@@ -82,8 +93,9 @@ function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
-  // Meta and extras
   const qMeta = (sel) => document.head.querySelector(sel)?.content || null;
+
+  // Capture h1,h2,h3 text
   const headings = Array.from(document.querySelectorAll('h1,h2,h3'))
     .map(h => ({ level: h.tagName, text: h.textContent.trim() }));
 
@@ -102,6 +114,8 @@ function buildPayload(ctx) {
     site,
     ref,
     source: 'DA.live',
+
+    // extra details
     lang: document.documentElement.lang || undefined,
     locale: navigator.language || undefined,
     meta: {
@@ -113,6 +127,7 @@ function buildPayload(ctx) {
       timezoneOffset: new Date().getTimezoneOffset(),
       viewport: { width: window.innerWidth, height: window.innerHeight },
     },
+
     idempotencyKey: `${cleanPath}#${isoNow}`,
   };
 }
@@ -138,7 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     const ctx = getContext();
-    const payload = buildPayload(ctx);
+    const payload = await buildPayload(ctx);
 
     await postToWebhook(payload);
 
