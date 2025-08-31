@@ -185,10 +185,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await postToWebhook(payload);
 
-    status.textContent = `Review request submitted by ${payload.submittedBy}.`;
+    status.textContent = `Review request submitted to workfront.`;
     details.innerHTML = `
       <p><strong>Title:</strong> ${payload.title}</p>
       <p><strong>Name:</strong> ${payload.name}</p>
+      <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">${payload.previewUrl}</a></p>
       <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank" rel="noopener noreferrer">${payload.liveUrl}</a></p>
     `;
