@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     status.textContent = `Review request submitted to workfront.`;
     details.innerHTML = `
   <div id="review-card">
-    <div class="header">Page Details Submitted</div>
+    <div class="header">Review Summary</div>
     <p><strong>Page Title:</strong> ${payload.title}</p>
     <p><strong>Page Name:</strong> ${payload.name}</p>
     <p><strong>Reviewer Email:</strong> ${payload.submittedBy}</p>
