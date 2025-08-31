@@ -35,12 +35,8 @@ async function resolveSubmitter(maxWait = 3000) {
         window.SFR_USER ||
         document.querySelector('meta[name="sfr:user"]')?.content ||
         deepFindUserEmail();
-      if (email) {
-        return resolve(email);
-      }
-      if (Date.now() - start > maxWait) {
-        return resolve('anonymous');
-      }
+      if (email) return resolve(email);
+      if (Date.now() - start > maxWait) return resolve('anonymous');
       setTimeout(check, 300);
     };
     check();
@@ -54,7 +50,6 @@ function getContext() {
   let url = window.top?.location?.href || '';
   let title = window.top?.document?.title || '';
 
-  // Derive ref, site, org from host
   let ref = '', site = '', org = '';
   const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (m) [, ref, site, org] = m;
@@ -93,10 +88,16 @@ async function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
-  const qMeta = (sel) => document.head.querySelector(sel)?.content || null;
+  // Use top document for authored content
+  const topDoc = window.top?.document;
 
-  // Capture h1,h2,h3 text
-  const headings = Array.from(document.querySelectorAll('h1,h2,h3'))
+  const qMeta = (sel) => topDoc?.querySelector(sel)?.content || null;
+  const description =
+    qMeta('meta[name="description"]') ||
+    qMeta('meta[property="og:description"]') ||
+    null;
+
+  const headings = Array.from(topDoc?.querySelectorAll('h1,h2,h3') || [])
     .map(h => ({ level: h.tagName, text: h.textContent.trim() }));
 
   return {
@@ -116,11 +117,9 @@ async function buildPayload(ctx) {
     source: 'DA.live',
 
     // extra details
-    lang: document.documentElement.lang || undefined,
+    lang: topDoc?.documentElement.lang || undefined,
     locale: navigator.language || undefined,
-    meta: {
-      description: qMeta('meta[name="description"]'),
-    },
+    meta: { description },
     headings,
     analytics: {
       userAgent: navigator.userAgent,
