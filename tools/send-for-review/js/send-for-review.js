@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p class="status-message">Review request submitted to Workfront.</p>
       <p><strong>Page Title:</strong> ${payload.title}</p>
       <p><strong>Page Name:</strong> ${payload.name}</p>
-      <p><strong>Reviewer Email:</strong> ${payload.submittedBy}</p>
+      <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
       <p><strong>Page Preview URL:</strong> 
         <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
           ${payload.previewUrl}
