@@ -94,13 +94,6 @@ async function buildPayload(ctx) {
   // Always use top document for authored content
   const topDoc = window.top?.document;
 
-  // Meta description from page
-  const qMeta = (sel) => topDoc?.querySelector(sel)?.content || null;
-  const description =
-    qMeta('meta[name="description"]') ||
-    qMeta('meta[property="og:description"]') ||
-    '';
-
   // Collect h1, h2, h3 from authored page
   const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || [])
     .map((h) => ({
@@ -127,15 +120,12 @@ async function buildPayload(ctx) {
     // extra details
     lang: topDoc?.documentElement.lang || undefined,
     locale: navigator.language || undefined,
-    meta: { description },
     headings,
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
       viewport: { width: window.innerWidth, height: window.innerHeight },
     },
-
-    idempotencyKey: `${cleanPath}#${isoNow}`,
   };
 }
 
