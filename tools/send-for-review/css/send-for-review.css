@@ -76,3 +76,10 @@ body {
   height: 22px; /* adjust size as needed */
   margin-right: 10px;
 }
+
+/* Status message inside the card */
+#review-card .status-message {
+  font-weight: 600;
+  color: #2e8540; /* success green */
+  margin-bottom: 12px;
+}

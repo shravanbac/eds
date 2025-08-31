@@ -185,7 +185,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await postToWebhook(payload);
 
-    status.textContent = `Review request submitted to workfront.`;
     details.innerHTML = `
   <div id="review-card">
     <div class="header-bar">
@@ -193,6 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <span class="header-text">Review Summary</span>
     </div>
     <div class="content">
+      <p class="status-message">Review request submitted to Workfront.</p>
       <p><strong>Page Title:</strong> ${payload.title}</p>
       <p><strong>Page Name:</strong> ${payload.name}</p>
       <p><strong>Reviewer Email:</strong> ${payload.submittedBy}</p>
@@ -204,6 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     </div>
   </div>
 `;
+
 
 
   } catch (err) {
