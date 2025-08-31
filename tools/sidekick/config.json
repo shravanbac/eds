@@ -2,10 +2,21 @@
   "project": "eds",
   "plugins": [
     {
+      "id": "send-for-review",
+      "title": "Send For Review",
+      "environments": [
+      "edit","dev","preview"
+      ],
+      "url": "https://hook.app.workfrontfusion.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd",
+      "isPalette": true,
+      "passConfig": true,
+      "paletteRect": "top: 50px; bottom: 10px; right: 10px; left: auto; width:400px; height: calc(100vh - 60px)"
+    }, 
+    {
       "id": "asset-library",
       "title": "AEM Assets",
       "environments": [
-      "edit","dev"
+      "edit","dev","preview"
       ],
       "url": "https://experience.adobe.com/solutions/CQ-assets-selectors/static-assets/resources/franklin/asset-selector.html?rail=false",
       "isPalette": true,
@@ -39,7 +50,7 @@
       "id": "contactus",
       "title": "Contact US",
       "environments": [ "edit","dev", "preview", "live", "prod" ],
-      "url": "/tools/contactus/contactus.html?user=aem-geeks",
+      "url": "/tools/contactus/contactus.html?user=shravanbac",
       "isPalette": true,
       "passConfig": false,
       "includePaths": [ "**/:x**" ],
@@ -58,7 +69,7 @@
       "id": "youtube",
       "title": "YouTube",
       "environments": [ "edit","dev", "preview", "live", "prod" ],
-      "url": "https://www.youtube.com/@AEMGeeks",
+      "url": "https://www.youtube.com",
       "passReferrer": true
     }
   ]
