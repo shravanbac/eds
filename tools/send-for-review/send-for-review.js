@@ -8,9 +8,20 @@ function resolveWebhook() {
   );
 }
 
+/** Collect context from sidekick config */
 function getContext() {
   const sk = window.hlx?.sidekick?.config || {};
-  const { host = '', ref = '', repo: site = '', owner: org = '' } = sk;
+
+  const {
+    host = '',
+    ref = '',
+    repo: site = '',
+    owner: org = '',
+    path = '',
+    url = '',
+    title = '',
+  } = sk;
+
   const env = host.includes('.aem.live') ? 'live' : 'page';
 
   return {
@@ -18,15 +29,15 @@ function getContext() {
     site,
     org,
     env,
-    path: sk.path || '', // authored page path
-    title: sk.title || document.title, // authored page title
-    url: sk.url || window.location.href, // authored page url
+    path: path.replace(/^\//, ''), // strip leading slash
+    title: title || document.title,
+    url: url || window.location.href,
     host,
     isoNow: new Date().toISOString(),
   };
 }
 
-
+/** Build full payload */
 function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
@@ -97,6 +108,7 @@ function buildPayload(ctx) {
   };
 }
 
+/** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
     method: 'POST',
@@ -110,6 +122,7 @@ async function postToWebhook(payload) {
   return res.json().catch(() => ({}));
 }
 
+/** UI binding */
 document.addEventListener('DOMContentLoaded', () => {
   const sendBtn = document.getElementById('sendBtn');
   const status = document.getElementById('status');
