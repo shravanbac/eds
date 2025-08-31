@@ -9,24 +9,23 @@ function resolveWebhook() {
 }
 
 function getContext() {
-  const { host, pathname, href } = window.location;
-  let ref = '', site = '', org = '', env = host.includes('.aem.live') ? 'live' : 'page';
-
-  const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
-  if (m) [, ref, site, org, env] = m;
+  const sk = window.hlx?.sidekick?.config || {};
+  const { host = '', ref = '', repo: site = '', owner: org = '' } = sk;
+  const env = host.includes('.aem.live') ? 'live' : 'page';
 
   return {
     ref,
     site,
     org,
     env,
-    path: (pathname || '/').replace(/^\//, ''),
-    title: document.title || pathname || '/',
-    url: href,
+    path: sk.path || '', // authored page path
+    title: sk.title || document.title, // authored page title
+    url: sk.url || window.location.href, // authored page url
     host,
     isoNow: new Date().toISOString(),
   };
 }
+
 
 function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow } = ctx;
