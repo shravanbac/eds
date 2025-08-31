@@ -1,54 +1,47 @@
-/* send-for-review.css */
-
-/* Base page styles */
+/* Base page */
 body {
   font-family: Arial, Helvetica, sans-serif;
   background-color: #f7f9fb;
   margin: 20px;
   color: #333;
+  line-height: 1.5;
 }
 
-/* Status line */
-#status {
-  font-size: 1rem;
-  font-weight: 500;
-  margin-bottom: 16px;
-}
-
-/* Success and error messages (status will be replaced dynamically) */
-#status.success {
-  color: #2e8540; /* green */
-}
-#status.error {
-  color: #c40000; /* red */
-}
-
-/* Review card */
+/* Review card container */
 #review-card {
   background-color: #fff;
   border: 1px solid #d9e1e2;
   border-radius: 6px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  padding: 16px 20px;
   max-width: 540px;
   margin: 0 auto;
-  line-height: 1.5;
+  overflow: hidden;
 }
 
-/* Header bar like Agilent nav */
-#review-card .header {
+/* Header bar with logo + title */
+#review-card .header-bar {
+  display: flex;
+  align-items: center;
   background-color: #0077c8; /* Agilent blue */
+  padding: 10px 14px;
   color: #fff;
   font-weight: bold;
   font-size: 1rem;
-  padding: 10px 14px;
-  border-radius: 6px 6px 0 0;
-  margin: -16px -20px 16px -20px;
 }
 
-/* Labels inside card */
+#review-card .header-bar .logo {
+  height: 22px;
+  margin-right: 10px;
+}
+
+/* Card content */
+#review-card .content {
+  padding: 16px 20px;
+}
+
+/* Labels */
 #review-card strong {
-  color: #004b87; /* darker brand blue */
+  color: #004b87; /* darker Agilent blue */
 }
 
 /* Links */
@@ -61,29 +54,19 @@ body {
   text-decoration: underline;
 }
 
-#review-card .header-bar {
-  display: flex;
-  align-items: center;
-  background-color: #0077c8; /* Agilent blue */
-  padding: 10px 14px;
-  border-radius: 6px 6px 0 0;
-  color: #fff;
-  font-weight: bold;
-  font-size: 1rem;
-}
-
-#review-card .header-bar .logo {
-  height: 22px; /* adjust size as needed */
-  margin-right: 10px;
-}
-
-/* Status message */
+/* Status messages */
 #review-card .status-message {
   font-weight: 600;
   margin-bottom: 12px;
-  color: #2e8540; 
 }
 
+#review-card .status-message.loading {
+  color: #555;
+  font-style: italic;
+}
+#review-card .status-message.success {
+  color: #2e8540; /* green */
+}
 #review-card .status-message.error {
   color: #c40000; /* red */
 }

@@ -15,9 +15,7 @@ function resolveWebhook() {
 /** Extract email from a string */
 function extractEmail(text) {
   if (!text) return null;
-  const match = text.match(
-    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
-  );
+  const match = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   return match ? match[0] : null;
 }
 
@@ -25,7 +23,6 @@ function extractEmail(text) {
 function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
-  // Look for spans with slot="description" or class="description"
   const spans = root.querySelectorAll(
     'span[slot="description"], span.description'
   );
@@ -34,27 +31,22 @@ function findUserEmail(root = window.parent?.document || document) {
     if (email) return email;
   }
 
-  // Search deeper inside shadowRoots
   for (const el of root.querySelectorAll('*')) {
     if (el.shadowRoot) {
       const found = findUserEmail(el.shadowRoot);
       if (found) return found;
     }
   }
-
   return null;
 }
 
 /** Resolve submitter */
-async function resolveSubmitter() {
+function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
       const email = findUserEmail();
-      if (email) {
-        resolve(email);
-      } else {
-        setTimeout(tryFind, RETRY_INTERVAL_MS);
-      }
+      if (email) resolve(email);
+      else setTimeout(tryFind, RETRY_INTERVAL_MS);
     };
     tryFind();
   });
@@ -64,15 +56,10 @@ async function resolveSubmitter() {
 function getContext() {
   const host = window.top?.location?.host || '';
   const path = window.top?.location?.pathname || '';
-  const url = window.top?.location?.href || '';
   const title = window.top?.document?.title || '';
 
-  let ref = '';
-  let site = '';
-  let org = '';
-  const match = host.match(
-    /^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/
-  );
+  let ref = '', site = '', org = '';
+  const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (match) [, ref, site, org] = match;
 
   const env = host.includes('.aem.live') ? 'live' : 'page';
@@ -84,7 +71,6 @@ function getContext() {
     env,
     path: path.replace(/^\//, ''),
     title,
-    url,
     host,
     isoNow: new Date().toISOString(),
   };
@@ -95,10 +81,7 @@ async function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title, env } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name =
-    (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(
-      /\.[^.]+$/,
-      ''
-    ) || 'index';
+    (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
 
   const submittedBy = await resolveSubmitter();
 
@@ -116,13 +99,12 @@ async function buildPayload(ctx) {
 
   const topDoc = window.top?.document;
 
-  // Collect headings
-  const headings = Array.from(
-    topDoc?.querySelectorAll('h1, h2, h3') || []
-  ).map((h) => ({
-    level: h.tagName,
-    text: h.textContent?.trim() || '',
-  }));
+  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map(
+    (h) => ({
+      level: h.tagName,
+      text: h.textContent?.trim() || '',
+    })
+  );
 
   return {
     title,
@@ -150,9 +132,9 @@ async function buildPayload(ctx) {
   };
 }
 
-/** Post payload to webhook */
+/** Post payload */
 async function postToWebhook(payload) {
-  const response = await fetch(resolveWebhook(), {
+  const res = await fetch(resolveWebhook(), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -162,54 +144,75 @@ async function postToWebhook(payload) {
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HTTP ${response.status}: ${errorText}`);
-  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
 
   try {
-    return await response.json();
+    return await res.json();
   } catch {
     return {};
   }
 }
 
-/** Auto-send when palette loads */
-document.addEventListener('DOMContentLoaded', async () => {
-  const status = document.getElementById('status');
+/** Render review card */
+function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
+
+  const statusClass = status === 'success'
+    ? 'success'
+    : status === 'error'
+    ? 'error'
+    : 'loading';
+
+  const content =
+    status === 'success' && payload
+      ? `
+        <p class="status-message ${statusClass}">✅ ${message}</p>
+        <p><strong>Page Title:</strong> ${payload.title}</p>
+        <p><strong>Page Name:</strong> ${payload.name}</p>
+        <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
+        <p><strong>Page Preview URL:</strong>
+          <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
+            ${payload.previewUrl}
+          </a>
+        </p>
+        <p><strong>Page Live URL:</strong>
+          <a href="${payload.liveUrl}" target="_blank" rel="noopener noreferrer">
+            ${payload.liveUrl}
+          </a>
+        </p>
+      `
+      : `<p class="status-message ${statusClass}">${message}</p>`;
+
+  details.innerHTML = `
+    <div id="review-card">
+      <div class="header-bar">
+        <img src="./assets/agilent-logo.png" alt="Agilent Logo" class="logo" />
+        <span class="header-text">Review Summary</span>
+      </div>
+      <div class="content">${content}</div>
+    </div>
+  `;
+}
+
+/** Init */
+document.addEventListener('DOMContentLoaded', async () => {
+  renderCard({ status: 'loading', message: '⏳ Submitting review request…' });
 
   try {
     const ctx = getContext();
     const payload = await buildPayload(ctx);
-
     await postToWebhook(payload);
 
-    details.innerHTML = `
-  <div id="review-card">
-    <div class="header-bar">
-      <img src="./assets/agilent-logo.png" alt="Agilent Logo" class="logo" />
-    </div>
-    <div class="content">
-      <p class="status-message">Review request submitted to Workfront.</p>
-      <p><strong>Page Title:</strong> ${payload.title}</p>
-      <p><strong>Page Name:</strong> ${payload.name}</p>
-      <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
-      <p><strong>Page Preview URL:</strong> 
-        <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
-          ${payload.previewUrl}
-        </a>
-      </p>
-    </div>
-  </div>
-`;
-
-
-
+    renderCard({
+      status: 'success',
+      message: 'Review request submitted to Workfront.',
+      payload,
+    });
   } catch (err) {
-    if (status) {
-      status.textContent = `Request Failed: ${err.message}`;
-    }
+    renderCard({
+      status: 'error',
+      message: `❌ Request Failed: ${err.message}`,
+    });
     console.error(err);
   }
 });
