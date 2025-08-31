@@ -9,45 +9,31 @@ function resolveWebhook() {
   );
 }
 
-/** Recursive deep selector for shadowRoots */
-function deepQuerySelector(root, selector) {
+/** Recursively find the user email inside shadowRoots */
+function deepFindUserEmail(root = document) {
   if (!root) return null;
-  const el = root.querySelector(selector);
-  if (el) return el;
-  for (const child of root.querySelectorAll('*')) {
-    if (child.shadowRoot) {
-      const found = deepQuerySelector(child.shadowRoot, selector);
+  const nodes = root.querySelectorAll('sk-menu-item.user');
+  for (const n of nodes) {
+    const span = n.querySelector('span[slot="description"]');
+    if (span) return span.textContent.trim();
+  }
+  for (const el of root.querySelectorAll('*')) {
+    if (el.shadowRoot) {
+      const found = deepFindUserEmail(el.shadowRoot);
       if (found) return found;
     }
   }
   return null;
 }
 
-/** Extract Sidekick user */
-function tryGetSubmitter() {
-  try {
-    const sk = document.querySelector('aem-sidekick, helix-sidekick');
-    const root = sk?.shadowRoot;
-    if (!root) return null;
-
-    const userNode = deepQuerySelector(root, 'sk-menu-item.user span[slot="description"]');
-    if (userNode) {
-      return userNode.textContent.trim();
-    }
-  } catch (e) {
-    console.warn('Could not extract submitter from Sidekick', e);
-  }
-  return null;
-}
-
-/** Retry until user is available */
-async function getSubmitterWithRetry(maxAttempts = 5, delay = 300) {
-  for (let i = 0; i < maxAttempts; i++) {
-    const user = tryGetSubmitter();
-    if (user) return user;
-    await new Promise(r => setTimeout(r, delay));
-  }
-  return 'anonymous';
+/** Resolve submitter identity */
+function resolveSubmitter() {
+  return (
+    window.SFR_USER ||
+    document.querySelector('meta[name="sfr:user"]')?.content ||
+    deepFindUserEmail() ||
+    'anonymous'
+  );
 }
 
 /** Collect authored page context */
@@ -57,6 +43,7 @@ function getContext() {
   let url = window.top?.location?.href || '';
   let title = window.top?.document?.title || '';
 
+  // Derive ref, site, org from host
   let ref = '', site = '', org = '';
   const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (m) [, ref, site, org] = m;
@@ -77,13 +64,13 @@ function getContext() {
 }
 
 /** Build full payload */
-async function buildPayload(ctx) {
+function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = await getSubmitterWithRetry();
+  const submittedBy = resolveSubmitter();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
@@ -95,7 +82,10 @@ async function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
+  // Meta and extras
   const qMeta = (sel) => document.head.querySelector(sel)?.content || null;
+  const headings = Array.from(document.querySelectorAll('h1,h2,h3'))
+    .map(h => ({ level: h.tagName, text: h.textContent.trim() }));
 
   return {
     title,
@@ -117,8 +107,7 @@ async function buildPayload(ctx) {
     meta: {
       description: qMeta('meta[name="description"]'),
     },
-    headings: Array.from(document.querySelectorAll('h1, h2, h3'))
-      .map((h) => ({ level: h.tagName, text: h.textContent.trim() })),
+    headings,
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
@@ -149,7 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     const ctx = getContext();
-    const payload = await buildPayload(ctx);
+    const payload = buildPayload(ctx);
 
     await postToWebhook(payload);
 
