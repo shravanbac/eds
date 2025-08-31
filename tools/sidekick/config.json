@@ -6,7 +6,7 @@
       "title": "Send For Review",
       "environments": ["edit","dev","preview"],
       "url": "/tools/send-for-review/send-for-review.html",
-      "isPalette": false,
+      "isPalette": true,
       "passConfig": true,
       "paletteRect": "top: 50px; bottom: 10px; right: 10px; left: auto; width:400px; height: calc(100vh - 60px)"
     }, 
