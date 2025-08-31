@@ -9,27 +9,35 @@ function resolveWebhook() {
   );
 }
 
-/** Resolve the logged-in user (submitter) */
+/** Try to get Sidekick user email from Shadow DOM */
+function getSidekickUser() {
+  try {
+    const sk = document.querySelector('aem-sidekick, helix-sidekick');
+    const actionBar = sk?.shadowRoot
+      ?.querySelector('plugin-action-bar')?.shadowRoot
+      ?.querySelector('action-bar')?.shadowRoot;
+
+    // Look for any likely profile/user node
+    const profileNode = actionBar?.querySelector('[class*="profile"], [class*="user"], .profile-menu, sp-menu-item');
+    if (profileNode) {
+      const text = profileNode.textContent.trim();
+      if (text) return text;
+    }
+  } catch (e) {
+    console.warn('Failed to read Sidekick DOM for user', e);
+  }
+  return null;
+}
+
+/** Resolve submitter identity */
 async function resolveSubmitter() {
-  // explicit override
   if (window.SFR_USER) return window.SFR_USER;
 
-  // meta tag in page
   const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
   if (metaUser) return metaUser;
 
-  // try helix auth API
-  try {
-    const res = await fetch('/.helix-auth.json', { credentials: 'include' });
-    if (res.ok) {
-      const auth = await res.json();
-      if (auth?.user?.email) return auth.user.email;
-      if (auth?.email) return auth.email;
-      if (auth?.login) return auth.login;
-    }
-  } catch (e) {
-    console.warn('Auth lookup failed', e);
-  }
+  const skUser = getSidekickUser();
+  if (skUser) return skUser;
 
   return 'anonymous';
 }
