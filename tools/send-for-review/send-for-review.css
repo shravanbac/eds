@@ -1,20 +1,41 @@
 /* send-for-review.css */
 
-/* Container styling */
-#review-card {
+/* Base page styles */
+body {
   font-family: Arial, Helvetica, sans-serif;
+  background-color: #f7f9fb;
+  margin: 20px;
+  color: #333;
+}
+
+/* Status line */
+#status {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+/* Success and error messages (status will be replaced dynamically) */
+#status.success {
+  color: #2e8540; /* green */
+}
+#status.error {
+  color: #c40000; /* red */
+}
+
+/* Review card */
+#review-card {
   background-color: #fff;
   border: 1px solid #d9e1e2;
   border-radius: 6px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   padding: 16px 20px;
-  max-width: 520px;
-  margin: 20px auto;
-  color: #333;
+  max-width: 540px;
+  margin: 0 auto;
   line-height: 1.5;
 }
 
-/* Header bar like Agilent top nav */
+/* Header bar like Agilent nav */
 #review-card .header {
   background-color: #0077c8; /* Agilent blue */
   color: #fff;
@@ -25,7 +46,7 @@
   margin: -16px -20px 16px -20px;
 }
 
-/* Labels */
+/* Labels inside card */
 #review-card strong {
   color: #004b87; /* darker brand blue */
 }
@@ -38,16 +59,4 @@
 }
 #review-card a:hover {
   text-decoration: underline;
-}
-
-/* Status messages */
-#review-card .status-success {
-  color: #2e8540; /* green */
-  font-weight: 600;
-  margin-bottom: 12px;
-}
-#review-card .status-error {
-  color: #c40000; /* error red */
-  font-weight: 600;
-  margin-bottom: 12px;
 }
