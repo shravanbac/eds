@@ -9,42 +9,26 @@ function resolveWebhook() {
   );
 }
 
-/** Parse sidekick config from ?config=... or window.name */
-function getSidekickConfig() {
-  // First, try ?config=...
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('config')) {
-    try {
-      return JSON.parse(decodeURIComponent(params.get('config')));
-    } catch (e) {
-      console.error('Failed to parse config from query param:', e);
-    }
-  }
-
-  // Fallback: try window.name
-  try {
-    if (window.name && window.name.startsWith('{')) {
-      return JSON.parse(window.name);
-    }
-  } catch (e) {
-    console.error('Failed to parse config from window.name:', e);
-  }
-
-  return {};
-}
-
-/** Collect context */
+/** Collect authored page context */
 function getContext() {
-  const sk = getSidekickConfig();
+  let sk = {};
 
+  // Primary: sidekick config from parent frame
+  try {
+    sk = window.top?.hlx?.sidekick?.config || {};
+  } catch (e) {
+    // ignore
+  }
+
+  // Fallbacks
   const {
-    host = '',
+    host = window.top?.location?.host || '',
     ref = '',
     repo: site = '',
     owner: org = '',
-    path = '',
-    url = '',
-    title = ''
+    path = window.top?.location?.pathname || '',
+    url = window.top?.location?.href || '',
+    title = window.top?.document?.title || ''
   } = sk;
 
   const env = host.includes('.aem.live') ? 'live' : 'page';
@@ -55,8 +39,8 @@ function getContext() {
     org,
     env,
     path: path.replace(/^\//, ''),
-    title: title || document.title,
-    url: url || window.location.href,
+    title,
+    url,
     host,
     isoNow: new Date().toISOString(),
   };
@@ -64,7 +48,7 @@ function getContext() {
 
 /** Build full payload */
 function buildPayload(ctx) {
-  const { ref, site, org, host, path, isoNow } = ctx;
+  const { ref, site, org, host, path, isoNow, title } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
@@ -85,7 +69,7 @@ function buildPayload(ctx) {
     : host || 'localhost';
 
   return {
-    title: ctx.title,
+    title,
     url: `https://${liveHost}/${cleanPath}`,
     name,
     publishedDate: isoNow,
@@ -103,7 +87,7 @@ function buildPayload(ctx) {
   };
 }
 
-/** Post payload */
+/** Post payload to webhook */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
     method: 'POST',
@@ -122,13 +106,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const status = document.getElementById('status');
   const details = document.getElementById('details');
 
-  const ctx = getContext();
-  console.log('Decoded sidekick config:', getSidekickConfig());
-  console.log('Context used for payload:', ctx);
-
   try {
+    const ctx = getContext();
     const payload = buildPayload(ctx);
-    console.log('Payload to webhook:', payload);
 
     await postToWebhook(payload);
 
