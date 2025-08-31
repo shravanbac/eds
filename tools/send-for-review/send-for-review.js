@@ -9,21 +9,35 @@ function resolveWebhook() {
   );
 }
 
-/** Extract logged-in user email from Sidekick shadow DOM */
+/** Recursive deep selector for shadowRoots */
+function deepQuerySelector(root, selector) {
+  if (!root) return null;
+  const el = root.querySelector(selector);
+  if (el) return el;
+  for (const child of root.querySelectorAll('*')) {
+    if (child.shadowRoot) {
+      const found = deepQuerySelector(child.shadowRoot, selector);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/** Extract Sidekick user */
 function getSubmitterFromSidekick() {
   try {
     const sk = document.querySelector('aem-sidekick, helix-sidekick');
-    const pluginRoot = sk?.shadowRoot?.querySelector('plugin-action-bar')?.shadowRoot;
-    const actionBar = pluginRoot?.querySelector('action-bar')?.shadowRoot;
+    const root = sk?.shadowRoot;
+    if (!root) return null;
 
-    const userNode = actionBar?.querySelector('sk-menu-item.user span[slot="description"]');
+    const userNode = deepQuerySelector(root, 'sk-menu-item.user span[slot="description"]');
     if (userNode) {
       return userNode.textContent.trim();
     }
   } catch (e) {
     console.warn('Could not extract submitter from Sidekick', e);
   }
-  return null;
+  return 'anonymous';
 }
 
 /** Collect authored page context */
@@ -33,7 +47,6 @@ function getContext() {
   let url = window.top?.location?.href || '';
   let title = window.top?.document?.title || '';
 
-  // Derive ref, site, org from host
   let ref = '', site = '', org = '';
   const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (m) [, ref, site, org] = m;
@@ -54,13 +67,13 @@ function getContext() {
 }
 
 /** Build full payload */
-async function buildPayload(ctx) {
+function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = getSubmitterFromSidekick() || 'anonymous';
+  const submittedBy = getSubmitterFromSidekick();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
@@ -72,13 +85,7 @@ async function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
-  // meta description with fallback
-  let metaDescription =
-    window.top.document.querySelector('meta[name="description"]')?.content?.trim() || null;
-  if (!metaDescription) {
-    const firstPara = window.top.document.querySelector('p');
-    if (firstPara) metaDescription = firstPara.textContent.trim();
-  }
+  const qMeta = (sel) => document.head.querySelector(sel)?.content || null;
 
   return {
     title,
@@ -95,27 +102,18 @@ async function buildPayload(ctx) {
     site,
     ref,
     source: 'DA.live',
-
     lang: document.documentElement.lang || undefined,
     locale: navigator.language || undefined,
-    timezoneOffset: new Date().getTimezoneOffset(),
-    userAgent: navigator.userAgent,
-
     meta: {
-      description: metaDescription,
-      keywords: window.top.document.querySelector('meta[name="keywords"]')?.content || null,
-      author: window.top.document.querySelector('meta[name="author"]')?.content || null,
+      description: qMeta('meta[name="description"]'),
     },
-
-    headings: Array.from(window.top.document.querySelectorAll('h1, h2, h3'))
-      .slice(0, 6)
+    headings: Array.from(document.querySelectorAll('h1, h2, h3'))
       .map((h) => ({ level: h.tagName, text: h.textContent.trim() })),
-
-    viewport: {
-      width: window.innerWidth,
-      height: window.innerHeight,
+    analytics: {
+      userAgent: navigator.userAgent,
+      timezoneOffset: new Date().getTimezoneOffset(),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
     },
-
     idempotencyKey: `${cleanPath}#${isoNow}`,
   };
 }
@@ -141,7 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     const ctx = getContext();
-    const payload = await buildPayload(ctx);
+    const payload = buildPayload(ctx);
 
     await postToWebhook(payload);
 
