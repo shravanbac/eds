@@ -188,17 +188,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     status.textContent = `Review request submitted to workfront.`;
     details.innerHTML = `
   <div id="review-card">
-    <div class="header">Review Summary</div>
-    <p><strong>Page Title:</strong> ${payload.title}</p>
-    <p><strong>Page Name:</strong> ${payload.name}</p>
-    <p><strong>Reviewer Email:</strong> ${payload.submittedBy}</p>
-    <p><strong>Page Preview URL:</strong>
-      <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
-        ${payload.previewUrl}
-      </a>
-    </p>
+    <div class="header-bar">
+      <img src="./assets/agilent-logo.png" alt="Agilent Logo" class="logo" />
+      <span class="header-text">Review Summary</span>
+    </div>
+    <div class="content">
+      <p><strong>Page Title:</strong> ${payload.title}</p>
+      <p><strong>Page Name:</strong> ${payload.name}</p>
+      <p><strong>Reviewer Email:</strong> ${payload.submittedBy}</p>
+      <p><strong>Page Preview URL:</strong> 
+        <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
+          ${payload.previewUrl}
+        </a>
+      </p>
+    </div>
   </div>
 `;
+
 
   } catch (err) {
     if (status) {
