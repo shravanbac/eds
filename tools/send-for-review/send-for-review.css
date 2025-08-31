@@ -1,0 +1,53 @@
+/* send-for-review.css */
+
+/* Container styling */
+#review-card {
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: #fff;
+  border: 1px solid #d9e1e2;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  padding: 16px 20px;
+  max-width: 520px;
+  margin: 20px auto;
+  color: #333;
+  line-height: 1.5;
+}
+
+/* Header bar like Agilent top nav */
+#review-card .header {
+  background-color: #0077c8; /* Agilent blue */
+  color: #fff;
+  font-weight: bold;
+  font-size: 1rem;
+  padding: 10px 14px;
+  border-radius: 6px 6px 0 0;
+  margin: -16px -20px 16px -20px;
+}
+
+/* Labels */
+#review-card strong {
+  color: #004b87; /* darker brand blue */
+}
+
+/* Links */
+#review-card a {
+  color: #0077c8;
+  text-decoration: none;
+  font-weight: 500;
+}
+#review-card a:hover {
+  text-decoration: underline;
+}
+
+/* Status messages */
+#review-card .status-success {
+  color: #2e8540; /* green */
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+#review-card .status-error {
+  color: #c40000; /* error red */
+  font-weight: 600;
+  margin-bottom: 12px;
+}
