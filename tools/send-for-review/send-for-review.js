@@ -9,9 +9,32 @@ function resolveWebhook() {
   );
 }
 
-/** Resolve submitter identity (simplified, defaults to anonymous) */
-function resolveSubmitter() {
-  return window.SFR_USER || 'anonymous';
+/** Try to get submitter email from Sidekick */
+function getSubmitterFromSidekick() {
+  try {
+    const sk = document.querySelector('aem-sidekick, helix-sidekick');
+    const root = sk?.shadowRoot;
+    if (!root) return null;
+
+    const userNode = root.querySelector('sk-menu-item.user span[slot="description"]');
+    return userNode?.textContent?.trim() || null;
+  } catch (e) {
+    console.warn('Could not read submitter from Sidekick', e);
+    return null;
+  }
+}
+
+/** Resolve submitter identity */
+async function resolveSubmitter() {
+  if (window.SFR_USER) return window.SFR_USER;
+
+  const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
+  if (metaUser) return metaUser;
+
+  const skUser = getSubmitterFromSidekick();
+  if (skUser) return skUser;
+
+  return 'anonymous';
 }
 
 /** Collect authored page context */
@@ -21,7 +44,6 @@ function getContext() {
   let url = window.top?.location?.href || '';
   let title = window.top?.document?.title || '';
 
-  // Derive ref, site, org from host
   let ref = '', site = '', org = '';
   const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (m) [, ref, site, org] = m;
@@ -42,13 +64,13 @@ function getContext() {
 }
 
 /** Build full payload */
-function buildPayload(ctx) {
+async function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = resolveSubmitter();
+  const submittedBy = await resolveSubmitter();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
@@ -60,29 +82,20 @@ function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
-  // Extras
-  const lang = window.top.document.documentElement.lang || undefined;
-  const locale = navigator.language || undefined;
-  const userAgent = navigator.userAgent || undefined;
-  const timezoneOffset = new Date().getTimezoneOffset();
+  // Meta description with fallback
+  let metaDescription =
+    window.top.document.querySelector('meta[name="description"]')?.content?.trim() || null;
+  if (!metaDescription) {
+    const firstPara = window.top.document.querySelector('p');
+    if (firstPara) {
+      metaDescription = firstPara.textContent.trim();
+    }
+  }
 
-  const metaDescription = window.top.document.querySelector('meta[name="description"]')?.content || null;
-  const metaKeywords = window.top.document.querySelector('meta[name="keywords"]')?.content || null;
-  const metaAuthor = window.top.document.querySelector('meta[name="author"]')?.content || null;
-
-  // Collect all OG tags into object
-  const ogMeta = {};
-  window.top.document.querySelectorAll('meta[property^="og:"]').forEach((m) => {
-    const key = m.getAttribute('property').replace('og:', '');
-    ogMeta[key] = m.content;
-  });
-
-  // ✅ Get h1, h2, h3 from authored page
-  const h1 = window.top.document.querySelector('h1')?.textContent.trim() || '';
-  const h2 = window.top.document.querySelector('h2')?.textContent.trim() || '';
-  const h3 = window.top.document.querySelector('h3')?.textContent.trim() || '';
-
-  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  // Collect headings
+  const headings = Array.from(window.top.document.querySelectorAll('h1, h2, h3'))
+    .slice(0, 6)
+    .map(h => ({ level: h.tagName, text: h.textContent.trim() }));
 
   return {
     title,
@@ -100,22 +113,19 @@ function buildPayload(ctx) {
     ref,
     source: 'DA.live',
 
-    // extras
-    lang,
-    locale,
-    userAgent,
-    timezoneOffset,
+    lang: window.top.document.documentElement.lang || undefined,
+    locale: navigator.language || undefined,
+    timezoneOffset: new Date().getTimezoneOffset(),
+    userAgent: navigator.userAgent || undefined,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+
     meta: {
       description: metaDescription,
-      keywords: metaKeywords,
-      author: metaAuthor,
-      og: Object.keys(ogMeta).length ? ogMeta : undefined,
+      keywords: window.top.document.querySelector('meta[name="keywords"]')?.content || null,
+      author: window.top.document.querySelector('meta[name="author"]')?.content || null,
     },
-    heading1: h1,
-    heading2: h2,
-    heading3: h3,
-    viewport,
 
+    headings,
     idempotencyKey: `${cleanPath}#${isoNow}`,
   };
 }
@@ -141,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     const ctx = getContext();
-    const payload = buildPayload(ctx);
+    const payload = await buildPayload(ctx);
 
     await postToWebhook(payload);
 
@@ -151,15 +161,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
       <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
       <p><strong>Submitted By:</strong> ${payload.submittedBy}</p>
-      <p><strong>Heading1:</strong> ${payload.heading1}</p>
-      <p><strong>Heading2:</strong> ${payload.heading2}</p>
-      <p><strong>Heading3:</strong> ${payload.heading3}</p>
-      <p><strong>Lang / Locale:</strong> ${payload.lang} / ${payload.locale}</p>
-      <p><strong>User Agent:</strong> ${payload.userAgent}</p>
-      <p><strong>Timezone Offset:</strong> ${payload.timezoneOffset}</p>
-      <p><strong>Meta Description:</strong> ${payload.meta.description}</p>
-      <p><strong>Viewport:</strong> ${payload.viewport.width} x ${payload.viewport.height}</p>
       <p><strong>Ref / Site / Org:</strong> ${payload.ref} / ${payload.site} / ${payload.org}</p>
+      <p><strong>Language:</strong> ${payload.lang}</p>
+      <p><strong>Locale:</strong> ${payload.locale}</p>
+      <p><strong>Timezone Offset:</strong> ${payload.timezoneOffset}</p>
+      <p><strong>User Agent:</strong> ${payload.userAgent}</p>
+      <p><strong>Meta Description:</strong> ${payload.meta.description || 'N/A'}</p>
+      <p><strong>Viewport:</strong> ${payload.viewport.width} x ${payload.viewport.height}</p>
+      <p><strong>Headings:</strong></p>
+      <ul>
+        ${payload.headings.map(h => `<li>${h.level}: ${h.text}</li>`).join('')}
+      </ul>
     `;
   } catch (err) {
     status.textContent = `❌ Failed: ${err.message}`;
