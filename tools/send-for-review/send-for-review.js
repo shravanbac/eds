@@ -9,108 +9,41 @@ function resolveWebhook() {
   );
 }
 
-/** Recursively find the user email inside shadowRoots */
-function deepFindUserEmail(root = document) {
-  if (!root) return null;
-  const nodes = root.querySelectorAll('sk-menu-item.user');
-  for (const n of nodes) {
-    const span = n.querySelector('span[slot="description"]');
-    if (span) return span.textContent.trim();
-  }
-  for (const el of root.querySelectorAll('*')) {
-    if (el.shadowRoot) {
-      const found = deepFindUserEmail(el.shadowRoot);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-/**
- * Recursively search all shadowRoots for <sk-menu-item class="user">
- * and return the email inside <span slot="description">.
- */
-function getSidekickUserEmail(root = document) {
-  if (!root) return null;
-
-  // Look for the user node
-  const userNode = root.querySelector('sk-menu-item.user span[slot="description"]');
-  if (userNode) {
-    return userNode.textContent.trim();
-  }
-
-  // If not found, go deeper into shadowRoots
-  for (const el of root.querySelectorAll('*')) {
-    if (el.shadowRoot) {
-      const found = getSidekickUserEmail(el.shadowRoot);
-      if (found) return found;
-    }
-  }
-
-  return null;
-}
-function waitForUserEmail(timeout = 5000) {
-  return new Promise((resolve) => {
-    const start = Date.now();
-
-    function check() {
-      const sk = document.querySelector('aem-sidekick, helix-sidekick');
-      if (sk?.shadowRoot) {
-        const email = deepFindUserEmail(sk.shadowRoot);
-        if (email) {
-          return resolve(email);
-        }
-      }
-      if (Date.now() - start > timeout) {
-        return resolve('anonymous'); // fallback
-      }
-      requestAnimationFrame(check);
-    }
-
-    check();
-  });
-}
-
-
-
 /** Extract Sidekick logged-in user email */
 function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
-  // Look for <span slot="description"> that contains an email
   const spans = root.querySelectorAll('span[slot="description"]');
   for (const span of spans) {
     const text = span.textContent.trim();
     const match = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    if (match) {
-      return match[0]; // return only the clean email
-    }
+    if (match) return match[0];
   }
 
-  // If not found, search recursively inside shadowRoots
   for (const el of root.querySelectorAll('*')) {
     if (el.shadowRoot) {
       const found = findUserEmail(el.shadowRoot);
       if (found) return found;
     }
   }
-
   return null;
 }
 
-/** Resolve submitter identity */
+/** Wait for Sidekick to load and then resolve submitter */
 async function resolveSubmitter() {
-  // Try Sidekick email first
-  const skEmail = findUserEmail();
-  if (skEmail) return skEmail;
-
-  // Fall back to meta tag or default
-  const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
-  if (metaUser) return metaUser;
-
-  return 'anonymous';
+  return new Promise((resolve) => {
+    const tryFind = () => {
+      const email = findUserEmail();
+      if (email) {
+        resolve(email);
+      } else {
+        // Try again in 500ms until found
+        setTimeout(tryFind, 500);
+      }
+    };
+    tryFind();
+  });
 }
-
 
 
 /** Collect authored page context */
@@ -146,7 +79,7 @@ async function buildPayload(ctx) {
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = await waitForUserEmail();
+  const submittedBy = await resolveSubmitter();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
