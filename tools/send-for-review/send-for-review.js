@@ -88,17 +88,22 @@ async function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
-  // Use top document for authored content
+  // Always use top document for authored content
   const topDoc = window.top?.document;
 
+  // Meta description from page
   const qMeta = (sel) => topDoc?.querySelector(sel)?.content || null;
   const description =
     qMeta('meta[name="description"]') ||
     qMeta('meta[property="og:description"]') ||
-    null;
+    '';
 
-  const headings = Array.from(topDoc?.querySelectorAll('h1,h2,h3') || [])
-    .map(h => ({ level: h.tagName, text: h.textContent.trim() }));
+  // Collect h1, h2, h3 from authored page
+  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || [])
+    .map((h) => ({
+      level: h.tagName,
+      text: h.textContent.trim(),
+    }));
 
   return {
     title,
