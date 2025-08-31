@@ -1,4 +1,7 @@
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+/* eslint-disable no-console */
+const DEFAULT_WEBHOOK =
+  'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
 function resolveWebhook() {
@@ -9,16 +12,26 @@ function resolveWebhook() {
   );
 }
 
+/** Extract email from a string */
+function extractEmail(text) {
+  if (!text) return null;
+  const match = text.match(
+    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+  );
+  return match ? match[0] : null;
+}
+
 /** Recursively find user email from Sidekick shadowRoots */
 function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
-  // Look for spans with slot="description"
-  const spans = root.querySelectorAll('span[slot="description"]');
+  // Look for spans with slot="description" or class="description"
+  const spans = root.querySelectorAll(
+    'span[slot="description"], span.description'
+  );
   for (const span of spans) {
-    const text = span.textContent.trim();
-    const match = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    if (match) return match[0];
+    const email = extractEmail(span.textContent?.trim() || '');
+    if (email) return email;
   }
 
   // Search deeper inside shadowRoots
@@ -28,10 +41,11 @@ function findUserEmail(root = window.parent?.document || document) {
       if (found) return found;
     }
   }
+
   return null;
 }
 
-/** Resolve submitter by waiting until Sidekick is hydrated */
+/** Resolve submitter */
 async function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
@@ -39,7 +53,7 @@ async function resolveSubmitter() {
       if (email) {
         resolve(email);
       } else {
-        setTimeout(tryFind, 500); // retry every 500ms
+        setTimeout(tryFind, RETRY_INTERVAL_MS);
       }
     };
     tryFind();
@@ -48,14 +62,18 @@ async function resolveSubmitter() {
 
 /** Collect authored page context */
 function getContext() {
-  let host = window.top?.location?.host || '';
-  let path = window.top?.location?.pathname || '';
-  let url = window.top?.location?.href || '';
-  let title = window.top?.document?.title || '';
+  const host = window.top?.location?.host || '';
+  const path = window.top?.location?.pathname || '';
+  const url = window.top?.location?.href || '';
+  const title = window.top?.document?.title || '';
 
-  let ref = '', site = '', org = '';
-  const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
-  if (m) [, ref, site, org] = m;
+  let ref = '';
+  let site = '';
+  let org = '';
+  const match = host.match(
+    /^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/
+  );
+  if (match) [, ref, site, org] = match;
 
   const env = host.includes('.aem.live') ? 'live' : 'page';
 
@@ -74,32 +92,37 @@ function getContext() {
 
 /** Build full payload */
 async function buildPayload(ctx) {
-  const { ref, site, org, host, path, isoNow, title } = ctx;
+  const { ref, site, org, host, path, isoNow, title, env } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
-  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
-    .replace(/\.[^.]+$/, '') || 'index';
+  const name =
+    (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(
+      /\.[^.]+$/,
+      ''
+    ) || 'index';
 
   const submittedBy = await resolveSubmitter();
 
-  const liveHost = ref && site && org
-    ? `${ref}--${site}--${org}.aem.live`
-    : host?.endsWith('.aem.page')
+  const liveHost =
+    ref && site && org
+      ? `${ref}--${site}--${org}.aem.live`
+      : host?.endsWith('.aem.page')
       ? host.replace('.aem.page', '.aem.live')
       : host || 'localhost';
 
-  const previewHost = ref && site && org
-    ? `${ref}--${site}--${org}.aem.page`
-    : host || 'localhost';
+  const previewHost =
+    ref && site && org
+      ? `${ref}--${site}--${org}.aem.page`
+      : host || 'localhost';
 
-  // Always use top document for authored content
   const topDoc = window.top?.document;
 
-  // Collect h1, h2, h3 from authored page
-  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || [])
-    .map((h) => ({
-      level: h.tagName,
-      text: h.textContent.trim(),
-    }));
+  // Collect headings
+  const headings = Array.from(
+    topDoc?.querySelectorAll('h1, h2, h3') || []
+  ).map((h) => ({
+    level: h.tagName,
+    text: h.textContent?.trim() || '',
+  }));
 
   return {
     title,
@@ -111,14 +134,12 @@ async function buildPayload(ctx) {
     previewUrl: `https://${previewHost}/${cleanPath}`,
     liveUrl: `https://${liveHost}/${cleanPath}`,
     host,
-    env: ctx.env,
+    env,
     org,
     site,
     ref,
     source: 'DA.live',
-
-    // extra details
-    lang: topDoc?.documentElement.lang || undefined,
+    lang: topDoc?.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
     headings,
     analytics: {
@@ -129,18 +150,28 @@ async function buildPayload(ctx) {
   };
 }
 
-/** Post payload */
+/** Post payload to webhook */
 async function postToWebhook(payload) {
-  const res = await fetch(resolveWebhook(), {
+  const response = await fetch(resolveWebhook(), {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
     mode: 'cors',
     body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`HTTP ${response.status}: ${errorText}`);
   }
-  return res.json().catch(() => ({}));
+
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
 }
 
 /** Auto-send when palette loads */
@@ -154,15 +185,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await postToWebhook(payload);
 
-    status.textContent = `✅ Review request submitted by ${payload.submittedBy}.`;
+    status.textContent = `Review request submitted by ${payload.submittedBy}.`;
     details.innerHTML = `
       <p><strong>Title:</strong> ${payload.title}</p>
-      <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
-      <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
-      <p><strong>Submitted By:</strong> ${payload.submittedBy}</p>
-      <p><strong>Ref / Site / Org:</strong> ${payload.ref} / ${payload.site} / ${payload.org}</p>
+      <p><strong>Name:</strong> ${payload.name}</p>
+      <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">${payload.previewUrl}</a></p>
+      <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank" rel="noopener noreferrer">${payload.liveUrl}</a></p>
     `;
   } catch (err) {
-    status.textContent = `❌ Failed: ${err.message}`;
+    if (status) {
+      status.textContent = `Request Failed: ${err.message}`;
+    }
+    console.error(err);
   }
 });
