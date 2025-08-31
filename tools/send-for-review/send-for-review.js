@@ -19,7 +19,7 @@ function getContext() {
     owner: org = '',
     path = '',
     url = '',
-    title = '',
+    title = ''
   } = sk;
 
   const env = host.includes('.aem.live') ? 'live' : 'page';
@@ -29,7 +29,7 @@ function getContext() {
     site,
     org,
     env,
-    path: path.replace(/^\//, ''), // strip leading slash
+    path: path.replace(/^\//, ''), // authored page path
     title: title || document.title,
     url: url || window.location.href,
     host,
