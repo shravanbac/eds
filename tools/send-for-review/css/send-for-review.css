@@ -77,9 +77,16 @@ body {
   margin-right: 10px;
 }
 
-/* Status message inside the card */
+/* Status message */
 #review-card .status-message {
   font-weight: 600;
-  color: #2e8540; /* success green */
   margin-bottom: 12px;
+}
+
+#review-card .status-message.success {
+  color: #2e8540; /* green */
+}
+
+#review-card .status-message.error {
+  color: #c40000; /* red */
 }
