@@ -9,18 +9,28 @@ function resolveWebhook() {
   );
 }
 
-/** Parse sidekick config passed via ?config=... */
+/** Parse sidekick config from ?config=... or window.name */
 function getSidekickConfig() {
+  // First, try ?config=...
   const params = new URLSearchParams(window.location.search);
-  let sk = {};
   if (params.has('config')) {
     try {
-      sk = JSON.parse(decodeURIComponent(params.get('config')));
+      return JSON.parse(decodeURIComponent(params.get('config')));
     } catch (e) {
-      console.error('Failed to parse sidekick config:', e);
+      console.error('Failed to parse config from query param:', e);
     }
   }
-  return sk;
+
+  // Fallback: try window.name
+  try {
+    if (window.name && window.name.startsWith('{')) {
+      return JSON.parse(window.name);
+    }
+  } catch (e) {
+    console.error('Failed to parse config from window.name:', e);
+  }
+
+  return {};
 }
 
 /** Collect context */
@@ -112,16 +122,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const status = document.getElementById('status');
   const details = document.getElementById('details');
 
-  try {
-    const ctx = getContext();
-    const payload = buildPayload(ctx);
+  const ctx = getContext();
+  console.log('Decoded sidekick config:', getSidekickConfig());
+  console.log('Context used for payload:', ctx);
 
+  try {
+    const payload = buildPayload(ctx);
     console.log('Payload to webhook:', payload);
+
     await postToWebhook(payload);
 
     status.textContent = '✅ Review request submitted.';
-
-    // Show summary details
     details.innerHTML = `
       <p><strong>Title:</strong> ${payload.title}</p>
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
