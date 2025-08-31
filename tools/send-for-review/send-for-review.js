@@ -60,25 +60,27 @@ function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
-  // extras
-  const lang = document.documentElement.lang || undefined;
+  // Extras
+  const lang = window.top.document.documentElement.lang || undefined;
   const locale = navigator.language || undefined;
   const userAgent = navigator.userAgent || undefined;
   const timezoneOffset = new Date().getTimezoneOffset();
 
-  const metaDescription = document.querySelector('meta[name="description"]')?.content || null;
-  const metaKeywords = document.querySelector('meta[name="keywords"]')?.content || null;
-  const metaAuthor = document.querySelector('meta[name="author"]')?.content || null;
+  const metaDescription = window.top.document.querySelector('meta[name="description"]')?.content || null;
+  const metaKeywords = window.top.document.querySelector('meta[name="keywords"]')?.content || null;
+  const metaAuthor = window.top.document.querySelector('meta[name="author"]')?.content || null;
 
   // Collect all OG tags into object
   const ogMeta = {};
-  document.querySelectorAll('meta[property^="og:"]').forEach((m) => {
+  window.top.document.querySelectorAll('meta[property^="og:"]').forEach((m) => {
     const key = m.getAttribute('property').replace('og:', '');
     ogMeta[key] = m.content;
   });
 
-  const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
-    .map((h) => ({ level: h.tagName, text: h.textContent.trim() }));
+  // ✅ Get h1, h2, h3 from authored page
+  const h1 = window.top.document.querySelector('h1')?.textContent.trim() || '';
+  const h2 = window.top.document.querySelector('h2')?.textContent.trim() || '';
+  const h3 = window.top.document.querySelector('h3')?.textContent.trim() || '';
 
   const viewport = { width: window.innerWidth, height: window.innerHeight };
 
@@ -109,7 +111,9 @@ function buildPayload(ctx) {
       author: metaAuthor,
       og: Object.keys(ogMeta).length ? ogMeta : undefined,
     },
-    headings,
+    heading1: h1,
+    heading2: h2,
+    heading3: h3,
     viewport,
 
     idempotencyKey: `${cleanPath}#${isoNow}`,
@@ -147,16 +151,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
       <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
       <p><strong>Submitted By:</strong> ${payload.submittedBy}</p>
-      <p><strong>Language:</strong> ${payload.lang}</p>
-      <p><strong>Locale:</strong> ${payload.locale}</p>
+      <p><strong>Heading1:</strong> ${payload.heading1}</p>
+      <p><strong>Heading2:</strong> ${payload.heading2}</p>
+      <p><strong>Heading3:</strong> ${payload.heading3}</p>
+      <p><strong>Lang / Locale:</strong> ${payload.lang} / ${payload.locale}</p>
       <p><strong>User Agent:</strong> ${payload.userAgent}</p>
       <p><strong>Timezone Offset:</strong> ${payload.timezoneOffset}</p>
-      <p><strong>Meta Description:</strong> ${payload.meta.description || ''}</p>
-      <p><strong>Meta Keywords:</strong> ${payload.meta.keywords || ''}</p>
-      <p><strong>Meta Author:</strong> ${payload.meta.author || ''}</p>
-      <p><strong>OG Tags:</strong> ${payload.meta.og ? JSON.stringify(payload.meta.og) : '—'}</p>
+      <p><strong>Meta Description:</strong> ${payload.meta.description}</p>
       <p><strong>Viewport:</strong> ${payload.viewport.width} x ${payload.viewport.height}</p>
-      <p><strong>Headings:</strong> ${payload.headings.map(h => `${h.level}: ${h.text}`).join(', ')}</p>
       <p><strong>Ref / Site / Org:</strong> ${payload.ref} / ${payload.site} / ${payload.org}</p>
     `;
   } catch (err) {
