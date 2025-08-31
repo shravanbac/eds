@@ -103,7 +103,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p><strong>Page Name:</strong> ${payload.name}</p>
       <p><strong>Review Submission Date:</strong> ${payload.publishedDate}</p>
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
-      <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
     `;
   } catch (err) {
     status.textContent = `❌ Failed: ${err.message}`;
