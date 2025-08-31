@@ -9,7 +9,7 @@ function resolveWebhook() {
   );
 }
 
-/** Deep search inside shadowRoots for user email */
+/** Recursively find the user email inside shadowRoots */
 function deepFindUserEmail(root = document) {
   if (!root) return null;
   const nodes = root.querySelectorAll('sk-menu-item.user');
@@ -26,21 +26,21 @@ function deepFindUserEmail(root = document) {
   return null;
 }
 
-/** Resolve submitter identity */
-async function resolveSubmitter() {
-  if (window.SFR_USER) return window.SFR_USER;
-
-  const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
-  if (metaUser) return metaUser;
-
-  // ✅ Get from Sidekick shadow DOM
-  const sk = document.querySelector('aem-sidekick, helix-sidekick');
-  if (sk?.shadowRoot) {
-    const email = deepFindUserEmail(sk.shadowRoot);
-    if (email) return email;
-  }
-
-  return 'anonymous';
+/** Resolve submitter identity with retry loop */
+async function resolveSubmitter(maxWait = 3000) {
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const check = () => {
+      const email =
+        window.SFR_USER ||
+        document.querySelector('meta[name="sfr:user"]')?.content ||
+        deepFindUserEmail();
+      if (email) return resolve(email);
+      if (Date.now() - start > maxWait) return resolve('anonymous');
+      setTimeout(check, 300);
+    };
+    check();
+  });
 }
 
 /** Collect authored page context */
@@ -50,7 +50,6 @@ function getContext() {
   let url = window.top?.location?.href || '';
   let title = window.top?.document?.title || '';
 
-  // Derive ref, site, org from host
   let ref = '', site = '', org = '';
   const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (m) [, ref, site, org] = m;
@@ -89,6 +88,23 @@ async function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
+  // Always use top document for authored content
+  const topDoc = window.top?.document;
+
+  // Meta description from page
+  const qMeta = (sel) => topDoc?.querySelector(sel)?.content || null;
+  const description =
+    qMeta('meta[name="description"]') ||
+    qMeta('meta[property="og:description"]') ||
+    '';
+
+  // Collect h1, h2, h3 from authored page
+  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || [])
+    .map((h) => ({
+      level: h.tagName,
+      text: h.textContent.trim(),
+    }));
+
   return {
     title,
     url: `https://${liveHost}/${cleanPath}`,
@@ -104,6 +120,18 @@ async function buildPayload(ctx) {
     site,
     ref,
     source: 'DA.live',
+
+    // extra details
+    lang: topDoc?.documentElement.lang || undefined,
+    locale: navigator.language || undefined,
+    meta: { description },
+    headings,
+    analytics: {
+      userAgent: navigator.userAgent,
+      timezoneOffset: new Date().getTimezoneOffset(),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    },
+
     idempotencyKey: `${cleanPath}#${isoNow}`,
   };
 }
