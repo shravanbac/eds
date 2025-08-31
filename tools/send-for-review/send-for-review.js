@@ -26,22 +26,49 @@ function deepFindUserEmail(root = document) {
   return null;
 }
 
-/** Resolve submitter identity with retry loop */
-async function resolveSubmitter(maxWait = 3000) {
-  const start = Date.now();
-  return new Promise((resolve) => {
-    const check = () => {
-      const email =
-        window.SFR_USER ||
-        document.querySelector('meta[name="sfr:user"]')?.content ||
-        deepFindUserEmail();
-      if (email) return resolve(email);
-      if (Date.now() - start > maxWait) return resolve('anonymous');
-      setTimeout(check, 300);
-    };
-    check();
-  });
+/**
+ * Recursively search all shadowRoots for <sk-menu-item class="user">
+ * and return the email inside <span slot="description">.
+ */
+function getSidekickUserEmail(root = document) {
+  if (!root) return null;
+
+  // Look for the user node
+  const userNode = root.querySelector('sk-menu-item.user span[slot="description"]');
+  if (userNode) {
+    return userNode.textContent.trim();
+  }
+
+  // If not found, go deeper into shadowRoots
+  for (const el of root.querySelectorAll('*')) {
+    if (el.shadowRoot) {
+      const found = getSidekickUserEmail(el.shadowRoot);
+      if (found) return found;
+    }
+  }
+
+  return null;
 }
+
+
+/** Resolve submitter identity */
+async function resolveSubmitter() {
+  // 1. Global overrides
+  if (window.SFR_USER) return window.SFR_USER;
+  const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
+  if (metaUser) return metaUser;
+
+  // 2. Try to read Sidekick DOM recursively
+  const sk = document.querySelector('aem-sidekick, helix-sidekick');
+  if (sk?.shadowRoot) {
+    const email = getSidekickUserEmail(sk.shadowRoot);
+    if (email) return email;
+  }
+
+  // 3. Fallback
+  return 'anonymous';
+}
+
 
 /** Collect authored page context */
 function getContext() {
