@@ -49,6 +49,28 @@ function getSidekickUserEmail(root = document) {
 
   return null;
 }
+function waitForUserEmail(timeout = 5000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+
+    function check() {
+      const sk = document.querySelector('aem-sidekick, helix-sidekick');
+      if (sk?.shadowRoot) {
+        const email = deepFindUserEmail(sk.shadowRoot);
+        if (email) {
+          return resolve(email);
+        }
+      }
+      if (Date.now() - start > timeout) {
+        return resolve('anonymous'); // fallback
+      }
+      requestAnimationFrame(check);
+    }
+
+    check();
+  });
+}
+
 
 
 /** Resolve submitter identity */
@@ -103,7 +125,7 @@ async function buildPayload(ctx) {
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = await resolveSubmitter();
+  const submittedBy = await waitForUserEmail();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
