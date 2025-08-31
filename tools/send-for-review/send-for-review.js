@@ -73,23 +73,44 @@ function waitForUserEmail(timeout = 5000) {
 
 
 
+/** Extract Sidekick logged-in user email */
+function findUserEmail(root = window.parent?.document || document) {
+  if (!root) return null;
+
+  // Look for <span slot="description"> that contains an email
+  const spans = root.querySelectorAll('span[slot="description"]');
+  for (const span of spans) {
+    const text = span.textContent.trim();
+    const match = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    if (match) {
+      return match[0]; // return only the clean email
+    }
+  }
+
+  // If not found, search recursively inside shadowRoots
+  for (const el of root.querySelectorAll('*')) {
+    if (el.shadowRoot) {
+      const found = findUserEmail(el.shadowRoot);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
 /** Resolve submitter identity */
 async function resolveSubmitter() {
-  // 1. Global overrides
-  if (window.SFR_USER) return window.SFR_USER;
+  // Try Sidekick email first
+  const skEmail = findUserEmail();
+  if (skEmail) return skEmail;
+
+  // Fall back to meta tag or default
   const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
   if (metaUser) return metaUser;
 
-  // 2. Try to read Sidekick DOM recursively
-  const sk = document.querySelector('aem-sidekick, helix-sidekick');
-  if (sk?.shadowRoot) {
-    const email = getSidekickUserEmail(sk.shadowRoot);
-    if (email) return email;
-  }
-
-  // 3. Fallback
   return 'anonymous';
 }
+
 
 
 /** Collect authored page context */
