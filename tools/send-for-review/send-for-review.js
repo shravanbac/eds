@@ -9,32 +9,21 @@ function resolveWebhook() {
   );
 }
 
-/** Try to get submitter email from Sidekick */
+/** Extract logged-in user email from Sidekick shadow DOM */
 function getSubmitterFromSidekick() {
   try {
     const sk = document.querySelector('aem-sidekick, helix-sidekick');
-    const root = sk?.shadowRoot;
-    if (!root) return null;
+    const pluginRoot = sk?.shadowRoot?.querySelector('plugin-action-bar')?.shadowRoot;
+    const actionBar = pluginRoot?.querySelector('action-bar')?.shadowRoot;
 
-    const userNode = root.querySelector('sk-menu-item.user span[slot="description"]');
-    return userNode?.textContent?.trim() || null;
+    const userNode = actionBar?.querySelector('sk-menu-item.user span[slot="description"]');
+    if (userNode) {
+      return userNode.textContent.trim();
+    }
   } catch (e) {
-    console.warn('Could not read submitter from Sidekick', e);
-    return null;
+    console.warn('Could not extract submitter from Sidekick', e);
   }
-}
-
-/** Resolve submitter identity */
-async function resolveSubmitter() {
-  if (window.SFR_USER) return window.SFR_USER;
-
-  const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
-  if (metaUser) return metaUser;
-
-  const skUser = getSubmitterFromSidekick();
-  if (skUser) return skUser;
-
-  return 'anonymous';
+  return null;
 }
 
 /** Collect authored page context */
@@ -44,6 +33,7 @@ function getContext() {
   let url = window.top?.location?.href || '';
   let title = window.top?.document?.title || '';
 
+  // Derive ref, site, org from host
   let ref = '', site = '', org = '';
   const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (m) [, ref, site, org] = m;
@@ -70,7 +60,7 @@ async function buildPayload(ctx) {
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = await resolveSubmitter();
+  const submittedBy = getSubmitterFromSidekick() || 'anonymous';
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
@@ -82,20 +72,13 @@ async function buildPayload(ctx) {
     ? `${ref}--${site}--${org}.aem.page`
     : host || 'localhost';
 
-  // Meta description with fallback
+  // meta description with fallback
   let metaDescription =
     window.top.document.querySelector('meta[name="description"]')?.content?.trim() || null;
   if (!metaDescription) {
     const firstPara = window.top.document.querySelector('p');
-    if (firstPara) {
-      metaDescription = firstPara.textContent.trim();
-    }
+    if (firstPara) metaDescription = firstPara.textContent.trim();
   }
-
-  // Collect headings
-  const headings = Array.from(window.top.document.querySelectorAll('h1, h2, h3'))
-    .slice(0, 6)
-    .map(h => ({ level: h.tagName, text: h.textContent.trim() }));
 
   return {
     title,
@@ -113,11 +96,10 @@ async function buildPayload(ctx) {
     ref,
     source: 'DA.live',
 
-    lang: window.top.document.documentElement.lang || undefined,
+    lang: document.documentElement.lang || undefined,
     locale: navigator.language || undefined,
     timezoneOffset: new Date().getTimezoneOffset(),
-    userAgent: navigator.userAgent || undefined,
-    viewport: { width: window.innerWidth, height: window.innerHeight },
+    userAgent: navigator.userAgent,
 
     meta: {
       description: metaDescription,
@@ -125,7 +107,15 @@ async function buildPayload(ctx) {
       author: window.top.document.querySelector('meta[name="author"]')?.content || null,
     },
 
-    headings,
+    headings: Array.from(window.top.document.querySelectorAll('h1, h2, h3'))
+      .slice(0, 6)
+      .map((h) => ({ level: h.tagName, text: h.textContent.trim() })),
+
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    },
+
     idempotencyKey: `${cleanPath}#${isoNow}`,
   };
 }
@@ -162,16 +152,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
       <p><strong>Submitted By:</strong> ${payload.submittedBy}</p>
       <p><strong>Ref / Site / Org:</strong> ${payload.ref} / ${payload.site} / ${payload.org}</p>
-      <p><strong>Language:</strong> ${payload.lang}</p>
-      <p><strong>Locale:</strong> ${payload.locale}</p>
-      <p><strong>Timezone Offset:</strong> ${payload.timezoneOffset}</p>
-      <p><strong>User Agent:</strong> ${payload.userAgent}</p>
-      <p><strong>Meta Description:</strong> ${payload.meta.description || 'N/A'}</p>
-      <p><strong>Viewport:</strong> ${payload.viewport.width} x ${payload.viewport.height}</p>
-      <p><strong>Headings:</strong></p>
-      <ul>
-        ${payload.headings.map(h => `<li>${h.level}: ${h.text}</li>`).join('')}
-      </ul>
     `;
   } catch (err) {
     status.textContent = `❌ Failed: ${err.message}`;
