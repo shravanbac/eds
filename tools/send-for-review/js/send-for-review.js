@@ -166,18 +166,13 @@ function renderCard({ status, message, payload }) {
   const content =
     status === 'success' && payload
       ? `
-        <p class="status-message ${statusClass}">✅ ${message}</p>
+        <p class="status-message ${statusClass}">${message}</p>
         <p><strong>Page Title:</strong> ${payload.title}</p>
         <p><strong>Page Name:</strong> ${payload.name}</p>
         <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
         <p><strong>Page Preview URL:</strong>
           <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
             ${payload.previewUrl}
-          </a>
-        </p>
-        <p><strong>Page Live URL:</strong>
-          <a href="${payload.liveUrl}" target="_blank" rel="noopener noreferrer">
-            ${payload.liveUrl}
           </a>
         </p>
       `
@@ -187,7 +182,6 @@ function renderCard({ status, message, payload }) {
     <div id="review-card">
       <div class="header-bar">
         <img src="./assets/agilent-logo.png" alt="Agilent Logo" class="logo" />
-        <span class="header-text">Review Summary</span>
       </div>
       <div class="content">${content}</div>
     </div>
