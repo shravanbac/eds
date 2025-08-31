@@ -9,23 +9,37 @@ function resolveWebhook() {
   );
 }
 
+/** Resolve the logged-in user (submitter) */
+async function resolveSubmitter() {
+  // explicit override
+  if (window.SFR_USER) return window.SFR_USER;
+
+  // meta tag in page
+  const metaUser = document.querySelector('meta[name="sfr:user"]')?.content;
+  if (metaUser) return metaUser;
+
+  // try helix auth API
+  try {
+    const res = await fetch('/.helix-auth.json', { credentials: 'include' });
+    if (res.ok) {
+      const auth = await res.json();
+      if (auth?.user?.email) return auth.user.email;
+      if (auth?.email) return auth.email;
+      if (auth?.login) return auth.login;
+    }
+  } catch (e) {
+    console.warn('Auth lookup failed', e);
+  }
+
+  return 'anonymous';
+}
+
 /** Collect authored page context */
 function getContext() {
   let host = window.top?.location?.host || '';
   let path = window.top?.location?.pathname || '';
   let url = window.top?.location?.href || '';
   let title = window.top?.document?.title || '';
-
-  // Try sidekick config if available
-  try {
-    const sk = window.top?.hlx?.sidekick?.config || {};
-    host = sk.host || host;
-    path = sk.path || path;
-    url = sk.url || url;
-    title = sk.title || title;
-  } catch (e) {
-    // ignore if sidekick config not available
-  }
 
   // Derive ref, site, org from host
   let ref = '', site = '', org = '';
@@ -48,18 +62,13 @@ function getContext() {
 }
 
 /** Build full payload */
-function buildPayload(ctx) {
+async function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  // Resolve who submitted
-  const submittedBy =
-    window.SFR_USER ||                                       // explicit override
-    document.querySelector('meta[name="sfr:user"]')?.content || // meta tag
-    window.top?.hlx?.sidekick?.user ||                       // sidekick logged-in user
-    'anonymous';
+  const submittedBy = await resolveSubmitter();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
@@ -111,7 +120,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     const ctx = getContext();
-    const payload = buildPayload(ctx);
+    const payload = await buildPayload(ctx);
 
     await postToWebhook(payload);
 
