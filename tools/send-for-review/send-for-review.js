@@ -99,10 +99,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     status.textContent = `✅ Review request submitted to workfront.`;
     details.innerHTML = `
-      <p><strong>Title:</strong> ${payload.title}</p>
-      <p><strong>Name:</strong> ${payload.name}</p>
-      <p><strong>Status:</strong> ${payload.status}</p>
-      <p><strong>Review Sent on:</strong> ${payload.publishedDate}</p>
+      <p><strong>Page Title:</strong> ${payload.title}</p>
+      <p><strong>Page Name:</strong> ${payload.name}</p>
+      <p><strong>Review Submission Date:</strong> ${payload.publishedDate}</p>
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
       <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
     `;
