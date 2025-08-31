@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Send For Review</title>
+    <script type="module">
+      async function sendForReview() {
+        // build payload with page info
+        const payload = {
+          url: window.parent.location.href,  // current page
+          title: document.title,             // page title
+          submittedBy: 'shravan',            // you can make this dynamic
+          isoNow: new Date().toISOString()   // timestamp
+        };
+
+        try {
+          const res = await fetch(
+            'https://hook.app.workfrontfusion.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            }
+          );
+
+          if (res.ok) {
+            document.getElementById("status").textContent = "✅ Submitted for Review!";
+          } else {
+            document.getElementById("status").textContent = "❌ Error submitting: " + res.status;
+          }
+        } catch (err) {
+          document.getElementById("status").textContent = "⚠️ Request failed: " + err.message;
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <h3>Send Page For Review</h3>
+    <button onclick="sendForReview()">Send Now</button>
+    <p id="status"></p>
+  </body>
+</html>
