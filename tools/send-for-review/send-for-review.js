@@ -24,7 +24,7 @@ function deepQuerySelector(root, selector) {
 }
 
 /** Extract Sidekick user */
-function getSubmitterFromSidekick() {
+function tryGetSubmitter() {
   try {
     const sk = document.querySelector('aem-sidekick, helix-sidekick');
     const root = sk?.shadowRoot;
@@ -36,6 +36,16 @@ function getSubmitterFromSidekick() {
     }
   } catch (e) {
     console.warn('Could not extract submitter from Sidekick', e);
+  }
+  return null;
+}
+
+/** Retry until user is available */
+async function getSubmitterWithRetry(maxAttempts = 5, delay = 300) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const user = tryGetSubmitter();
+    if (user) return user;
+    await new Promise(r => setTimeout(r, delay));
   }
   return 'anonymous';
 }
@@ -67,13 +77,13 @@ function getContext() {
 }
 
 /** Build full payload */
-function buildPayload(ctx) {
+async function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = getSubmitterFromSidekick();
+  const submittedBy = await getSubmitterWithRetry();
 
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
@@ -139,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     const ctx = getContext();
-    const payload = buildPayload(ctx);
+    const payload = await buildPayload(ctx);
 
     await postToWebhook(payload);
 
