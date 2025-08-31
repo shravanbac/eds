@@ -9,10 +9,11 @@ function resolveWebhook() {
   );
 }
 
-/** Extract Sidekick logged-in user email */
+/** Recursively find user email from Sidekick shadowRoots */
 function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
+  // Look for spans with slot="description"
   const spans = root.querySelectorAll('span[slot="description"]');
   for (const span of spans) {
     const text = span.textContent.trim();
@@ -20,6 +21,7 @@ function findUserEmail(root = window.parent?.document || document) {
     if (match) return match[0];
   }
 
+  // Search deeper inside shadowRoots
   for (const el of root.querySelectorAll('*')) {
     if (el.shadowRoot) {
       const found = findUserEmail(el.shadowRoot);
@@ -29,7 +31,7 @@ function findUserEmail(root = window.parent?.document || document) {
   return null;
 }
 
-/** Wait for Sidekick to load and then resolve submitter */
+/** Resolve submitter by waiting until Sidekick is hydrated */
 async function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
@@ -37,14 +39,12 @@ async function resolveSubmitter() {
       if (email) {
         resolve(email);
       } else {
-        // Try again in 500ms until found
-        setTimeout(tryFind, 500);
+        setTimeout(tryFind, 500); // retry every 500ms
       }
     };
     tryFind();
   });
 }
-
 
 /** Collect authored page context */
 function getContext() {
