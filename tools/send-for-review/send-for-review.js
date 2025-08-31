@@ -44,8 +44,6 @@ function buildPayload(ctx) {
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = resolveSubmitter();
-
   const liveHost = ref && site && org
     ? `${ref}--${site}--${org}.aem.live`
     : host?.endsWith('.aem.page')
@@ -61,7 +59,6 @@ function buildPayload(ctx) {
     url: `https://${liveHost}/${cleanPath}`,
     name,
     publishedDate: isoNow,
-    submittedBy,
     path: `/${cleanPath}`,
     previewUrl: `https://${previewHost}/${cleanPath}`,
     liveUrl: `https://${liveHost}/${cleanPath}`,
