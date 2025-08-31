@@ -11,25 +11,26 @@ function resolveWebhook() {
 
 /** Collect authored page context */
 function getContext() {
-  let sk = {};
+  let host = window.top?.location?.host || '';
+  let path = window.top?.location?.pathname || '';
+  let url = window.top?.location?.href || '';
+  let title = window.top?.document?.title || '';
 
-  // Primary: sidekick config from parent frame
+  // Try sidekick config if available
   try {
-    sk = window.top?.hlx?.sidekick?.config || {};
+    const sk = window.top?.hlx?.sidekick?.config || {};
+    host = sk.host || host;
+    path = sk.path || path;
+    url = sk.url || url;
+    title = sk.title || title;
   } catch (e) {
     // ignore
   }
 
-  // Fallbacks
-  const {
-    host = window.top?.location?.host || '',
-    ref = '',
-    repo: site = '',
-    owner: org = '',
-    path = window.top?.location?.pathname || '',
-    url = window.top?.location?.href || '',
-    title = window.top?.document?.title || ''
-  } = sk;
+  // Derive ref, site, org from host
+  let ref = '', site = '', org = '';
+  const m = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
+  if (m) [, ref, site, org] = m;
 
   const env = host.includes('.aem.live') ? 'live' : 'page';
 
@@ -53,9 +54,11 @@ function buildPayload(ctx) {
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
+  // Figure out who submitted
   const submittedBy =
     window.SFR_USER ||
     document.querySelector('meta[name="sfr:user"]')?.content ||
+    window.top?.hlx?.sidekick?.user ||
     'anonymous';
 
   const liveHost = ref && site && org
@@ -87,7 +90,7 @@ function buildPayload(ctx) {
   };
 }
 
-/** Post payload to webhook */
+/** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
     method: 'POST',
@@ -118,6 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
       <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
       <p><strong>Submitted By:</strong> ${payload.submittedBy}</p>
+      <p><strong>Ref/Site/Org:</strong> ${payload.ref} / ${payload.site} / ${payload.org}</p>
     `;
   } catch (err) {
     status.textContent = `❌ Failed: ${err.message}`;
