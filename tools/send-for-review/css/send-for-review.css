@@ -81,10 +81,7 @@ body {
 #review-card .status-message {
   font-weight: 600;
   margin-bottom: 12px;
-}
-
-#review-card .status-message.success {
-  color: #2e8540; /* green */
+  color: #2e8540; 
 }
 
 #review-card .status-message.error {
