@@ -24,7 +24,7 @@ function getContext() {
     url = sk.url || url;
     title = sk.title || title;
   } catch (e) {
-    // ignore
+    // ignore if sidekick config not available
   }
 
   // Derive ref, site, org from host
@@ -54,11 +54,11 @@ function buildPayload(ctx) {
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
 
-  // Figure out who submitted
+  // Resolve who submitted
   const submittedBy =
-    window.SFR_USER ||
-    document.querySelector('meta[name="sfr:user"]')?.content ||
-    window.top?.hlx?.sidekick?.user ||
+    window.SFR_USER ||                                       // explicit override
+    document.querySelector('meta[name="sfr:user"]')?.content || // meta tag
+    window.top?.hlx?.sidekick?.user ||                       // sidekick logged-in user
     'anonymous';
 
   const liveHost = ref && site && org
@@ -115,13 +115,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await postToWebhook(payload);
 
-    status.textContent = '✅ Review request submitted.';
+    status.textContent = `✅ Review request submitted by ${payload.submittedBy}.`;
     details.innerHTML = `
       <p><strong>Title:</strong> ${payload.title}</p>
       <p><strong>Preview URL:</strong> <a href="${payload.previewUrl}" target="_blank">${payload.previewUrl}</a></p>
       <p><strong>Live URL:</strong> <a href="${payload.liveUrl}" target="_blank">${payload.liveUrl}</a></p>
       <p><strong>Submitted By:</strong> ${payload.submittedBy}</p>
-      <p><strong>Ref/Site/Org:</strong> ${payload.ref} / ${payload.site} / ${payload.org}</p>
+      <p><strong>Ref / Site / Org:</strong> ${payload.ref} / ${payload.site} / ${payload.org}</p>
     `;
   } catch (err) {
     status.textContent = `❌ Failed: ${err.message}`;
