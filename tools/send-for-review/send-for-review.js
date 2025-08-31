@@ -189,17 +189,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     details.innerHTML = `
   <div id="review-card">
     <div class="header">Page Details Submitted</div>
-    <p><strong>Title:</strong> ${payload.title}</p>
-    <p><strong>Name:</strong> ${payload.name}</p>
-    <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
-    <p><strong>Preview URL:</strong>
+    <p><strong>Page Title:</strong> ${payload.title}</p>
+    <p><strong>Page Name:</strong> ${payload.name}</p>
+    <p><strong>Reviewer Email:</strong> ${payload.submittedBy}</p>
+    <p><strong>Page Preview URL:</strong>
       <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
         ${payload.previewUrl}
-      </a>
-    </p>
-    <p><strong>Live URL:</strong>
-      <a href="${payload.liveUrl}" target="_blank" rel="noopener noreferrer">
-        ${payload.liveUrl}
       </a>
     </p>
   </div>
