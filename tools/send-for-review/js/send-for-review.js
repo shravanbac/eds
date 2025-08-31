@@ -189,7 +189,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   <div id="review-card">
     <div class="header-bar">
       <img src="./assets/agilent-logo.png" alt="Agilent Logo" class="logo" />
-      <span class="header-text">Review Summary</span>
     </div>
     <div class="content">
       <p class="status-message">Review request submitted to Workfront.</p>
