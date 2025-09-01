@@ -1,13 +1,12 @@
-const DEFAULT_WEBHOOK =
-  'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
 function resolveWebhook() {
   return (
-    window.SFR_WEBHOOK_URL ||
-    document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() ||
-    DEFAULT_WEBHOOK
+    window.SFR_WEBHOOK_URL
+    || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim()
+    || DEFAULT_WEBHOOK
   );
 }
 
@@ -23,19 +22,14 @@ function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
   const spans = root.querySelectorAll(
-    'span[slot="description"], span.description'
+    'span[slot="description"], span.description',
   );
-  for (const span of spans) {
-    const email = extractEmail(span.textContent?.trim() || '');
-    if (email) return email;
-  }
+  const emailSpan = Array.from(spans).find((span) => extractEmail(span.textContent?.trim() || ''));
+  if (emailSpan) return extractEmail(emailSpan.textContent.trim());
 
-  for (const el of root.querySelectorAll('*')) {
-    if (el.shadowRoot) {
-      const found = findUserEmail(el.shadowRoot);
-      if (found) return found;
-    }
-  }
+  const shadowHost = Array.from(root.querySelectorAll('*')).find((el) => el.shadowRoot);
+  if (shadowHost) return findUserEmail(shadowHost.shadowRoot);
+
   return null;
 }
 
@@ -57,7 +51,8 @@ function getContext() {
   const path = window.top?.location?.pathname || '';
   const title = window.top?.document?.title || '';
 
-  let ref = '', site = '', org = '';
+  let ref = ''; let site = ''; let
+    org = '';
   const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (match) [, ref, site, org] = match;
 
@@ -77,24 +72,25 @@ function getContext() {
 
 /** Build full payload */
 async function buildPayload(ctx) {
-  const { ref, site, org, host, path, isoNow, title, env } = ctx;
+  const {
+    ref, site, org, host, path, isoNow, title, env,
+  } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
-  const name =
-    (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
+  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
 
   const submittedBy = await resolveSubmitter();
 
-  const liveHost =
-    ref && site && org
-      ? `${ref}--${site}--${org}.aem.live`
-      : host?.endsWith('.aem.page')
-      ? host.replace('.aem.page', '.aem.live')
-      : host || 'localhost';
+  let liveHost = host || 'localhost';
+  if (ref && site && org) {
+    liveHost = `${ref}--${site}--${org}.aem.live`;
+  } else if (host?.endsWith('.aem.page')) {
+    liveHost = host.replace('.aem.page', '.aem.live');
+  }
 
-  const previewHost =
-    ref && site && org
-      ? `${ref}--${site}--${org}.aem.page`
-      : host || 'localhost';
+  let previewHost = host || 'localhost';
+  if (ref && site && org) {
+    previewHost = `${ref}--${site}--${org}.aem.page`;
+  }
 
   const topDoc = window.top?.document;
 
@@ -134,7 +130,6 @@ async function buildPayload(ctx) {
   };
 }
 
-
 /** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
@@ -160,15 +155,12 @@ async function postToWebhook(payload) {
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
 
-  const statusClass = status === 'success'
-    ? 'success'
-    : status === 'error'
-    ? 'error'
-    : 'loading';
+  let statusClass = 'loading';
+  if (status === 'success') statusClass = 'success';
+  else if (status === 'error') statusClass = 'error';
 
-  const content =
-    status === 'success' && payload
-      ? `
+  const content = status === 'success' && payload
+    ? `
         <p class="status-message ${statusClass}">${message}</p>
         <p><strong>Page Title:</strong> ${payload.title}</p>
         <p><strong>Page Name:</strong> ${payload.name}</p>
@@ -179,7 +171,7 @@ function renderCard({ status, message, payload }) {
           </a>
         </p>
       `
-      : `<p class="status-message ${statusClass}">${message}</p>`;
+    : `<p class="status-message ${statusClass}">${message}</p>`;
 
   details.innerHTML = `
     <div id="review-card">
@@ -191,7 +183,7 @@ function renderCard({ status, message, payload }) {
   `;
 }
 
-/** Init */
+/** Initialize */
 document.addEventListener('DOMContentLoaded', async () => {
   renderCard({ status: 'loading', message: 'Submitting review request…' });
 
