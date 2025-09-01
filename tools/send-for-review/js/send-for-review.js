@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 const DEFAULT_WEBHOOK =
   'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 const RETRY_INTERVAL_MS = 500;
@@ -26,47 +25,30 @@ function findUserEmail(root = window.parent?.document || document) {
   const spans = root.querySelectorAll(
     'span[slot="description"], span.description'
   );
+  for (const span of spans) {
+    const email = extractEmail(span.textContent?.trim() || '');
+    if (email) return email;
+  }
 
-  const email =
-    Array.from(spans)
-      .map((span) => extractEmail(span.textContent?.trim() || ''))
-      .find((val) => val) || null;
-
-  if (email) return email;
-
-  const shadowHost = Array.from(root.querySelectorAll('*')).find(
-    (el) => el.shadowRoot
-  );
-  if (shadowHost) return findUserEmail(shadowHost.shadowRoot);
-
+  for (const el of root.querySelectorAll('*')) {
+    if (el.shadowRoot) {
+      const found = findUserEmail(el.shadowRoot);
+      if (found) return found;
+    }
+  }
   return null;
 }
 
-/** Resolve submitter (loops until found) */
+/** Resolve submitter */
 function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
       const email = findUserEmail();
-      if (email) {
-        resolve(email);
-      } else {
-        setTimeout(tryFind, RETRY_INTERVAL_MS);
-      }
+      if (email) resolve(email);
+      else setTimeout(tryFind, RETRY_INTERVAL_MS);
     };
     tryFind();
   });
-}
-
-/** Resolve submitter safely with timeout fallback */
-async function resolveSubmitterSafe(timeoutMs = 3000) {
-  try {
-    return await Promise.race([
-      resolveSubmitter(),
-      new Promise((resolve) => setTimeout(() => resolve('unknown@user'), timeoutMs)),
-    ]);
-  } catch {
-    return 'unknown@user';
-  }
 }
 
 /** Collect authored page context */
@@ -75,9 +57,7 @@ function getContext() {
   const path = window.top?.location?.pathname || '';
   const title = window.top?.document?.title || '';
 
-  let ref = '';
-  let site = '';
-  let org = '';
+  let ref = '', site = '', org = '';
   const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (match) [, ref, site, org] = match;
 
@@ -102,21 +82,19 @@ async function buildPayload(ctx) {
   const name =
     (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
 
-  const submittedBy = await resolveSubmitterSafe();
+  const submittedBy = await resolveSubmitter();
 
-  // liveHost (lint-friendly, no nested ternary)
-  let liveHost = host || 'localhost';
-  if (ref && site && org) {
-    liveHost = `${ref}--${site}--${org}.aem.live`;
-  } else if (host?.endsWith('.aem.page')) {
-    liveHost = host.replace('.aem.page', '.aem.live');
-  }
+  const liveHost =
+    ref && site && org
+      ? `${ref}--${site}--${org}.aem.live`
+      : host?.endsWith('.aem.page')
+      ? host.replace('.aem.page', '.aem.live')
+      : host || 'localhost';
 
-  // previewHost (lint-friendly)
-  let previewHost = host || 'localhost';
-  if (ref && site && org) {
-    previewHost = `${ref}--${site}--${org}.aem.page`;
-  }
+  const previewHost =
+    ref && site && org
+      ? `${ref}--${site}--${org}.aem.page`
+      : host || 'localhost';
 
   const topDoc = window.top?.document;
 
@@ -156,6 +134,7 @@ async function buildPayload(ctx) {
   };
 }
 
+
 /** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
@@ -181,8 +160,11 @@ async function postToWebhook(payload) {
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
 
-  const statusMap = { success: 'success', error: 'error' };
-  const statusClass = statusMap[status] || 'loading';
+  const statusClass = status === 'success'
+    ? 'success'
+    : status === 'error'
+    ? 'error'
+    : 'loading';
 
   const content =
     status === 'success' && payload
@@ -194,11 +176,6 @@ function renderCard({ status, message, payload }) {
         <p><strong>Page Preview URL:</strong>
           <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
             ${payload.previewUrl}
-          </a>
-        </p>
-        <p><strong>Page Live URL:</strong>
-          <a href="${payload.liveUrl}" target="_blank" rel="noopener noreferrer">
-            ${payload.liveUrl}
           </a>
         </p>
       `
@@ -221,7 +198,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const ctx = getContext();
     const payload = await buildPayload(ctx);
-
     await postToWebhook(payload);
 
     renderCard({
@@ -234,6 +210,5 @@ document.addEventListener('DOMContentLoaded', async () => {
       status: 'error',
       message: `Request Failed: ${err.message}`,
     });
-    console.error(err);
   }
 });
