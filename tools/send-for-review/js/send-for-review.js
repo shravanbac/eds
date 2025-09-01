@@ -64,9 +64,10 @@ function resolveSubmitter() {
 
 /** Collect authored page context */
 function getContext() {
-  const host = document.referrer?.host || '';
-  const path = document.referrer?.pathname || '';
-  const title = document.referrer?.document?.title || '';
+  const refUrl = document.referrer ? new URL(document.referrer) : null;
+  const host = refUrl?.host || '';
+  const path = refUrl?.pathname || '';
+  const title = refUrl? '' : document.title;
 
   let ref = '';
   let site = '';
