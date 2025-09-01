@@ -19,21 +19,35 @@ function extractEmail(text) {
 function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
-  const spans = root.querySelectorAll(
-    'span[slot="description"], span.description',
-  );
-  for (const span of spans) {
-    const email = extractEmail(span.textContent?.trim() || '');
-    if (email) return email;
-  }
+  // check description spans
+  const spans = root.querySelectorAll('span[slot="description"], span.description');
+  let foundEmail = null;
 
-  for (const el of root.querySelectorAll('*')) {
-    if (el.shadowRoot) {
-      const found = findUserEmail(el.shadowRoot);
-      if (found) return found;
+  Array.from(spans).some((span) => {
+    const email = extractEmail(span.textContent?.trim() || '');
+    if (email) {
+      foundEmail = email;
+      return true; // stop iteration
     }
-  }
-  return null;
+    return false;
+  });
+
+  if (foundEmail) return foundEmail;
+
+  // recurse into shadowRoots
+  const elements = root.querySelectorAll('*');
+  Array.from(elements).some((el) => {
+    if (el.shadowRoot) {
+      const email = findUserEmail(el.shadowRoot);
+      if (email) {
+        foundEmail = email;
+        return true; // stop iteration
+      }
+    }
+    return false;
+  });
+
+  return foundEmail;
 }
 
 /** Resolve submitter */
