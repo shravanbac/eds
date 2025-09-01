@@ -94,18 +94,25 @@ async function buildPayload(ctx) {
     ref, site, org, host, path, isoNow, title, env,
   } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
-  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
+  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
+    .replace(/\.[^.]+$/, '') || 'index';
   const submittedBy = await resolveSubmitter();
 
-  const liveHost = ref && site && org
-    ? `${ref}--${site}--${org}.aem.live`
-    : host?.endsWith('.aem.page')
-      ? host.replace('.aem.page', '.aem.live')
-      : host || 'localhost';
+  let liveHost;
+  if (ref && site && org) {
+    liveHost = `${ref}--${site}--${org}.aem.live`;
+  } else if (host?.endsWith('.aem.page')) {
+    liveHost = host.replace('.aem.page', '.aem.live');
+  } else {
+    liveHost = host || 'localhost';
+  }
 
-  const previewHost = ref && site && org
-    ? `${ref}--${site}--${org}.aem.page`
-    : host || 'localhost';
+  let previewHost;
+  if (ref && site && org) {
+    previewHost = `${ref}--${site}--${org}.aem.page`;
+  } else {
+    previewHost = host || 'localhost';
+  }
 
   const topDoc = window.top?.document;
 
@@ -170,11 +177,11 @@ async function postToWebhook(payload) {
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
 
-  const statusClass = status === 'success'
-    ? 'success'
-    : status === 'error'
-      ? 'error'
-      : 'loading';
+  const statusMap = {
+    success: 'success',
+    error: 'error',
+  };
+  const statusClass = statusMap[status] || 'loading';
 
   const content = status === 'success' && payload
     ? `
