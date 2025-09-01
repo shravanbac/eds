@@ -1,4 +1,4 @@
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
