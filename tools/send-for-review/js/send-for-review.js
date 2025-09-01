@@ -22,7 +22,7 @@ function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
   const spans = root.querySelectorAll(
-    'span[slot="description"], span.description',
+    'span[slot="description"], span.description'
   );
   const emailSpan = Array.from(spans).find((span) => extractEmail(span.textContent?.trim() || ''));
   if (emailSpan) return extractEmail(emailSpan.textContent.trim());
@@ -51,8 +51,7 @@ function getContext() {
   const path = window.top?.location?.pathname || '';
   const title = window.top?.document?.title || '';
 
-  let ref = ''; let site = ''; let
-    org = '';
+  let ref = ''; let site = ''; let org = '';
   const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (match) [, ref, site, org] = match;
 
@@ -73,7 +72,7 @@ function getContext() {
 /** Build full payload */
 async function buildPayload(ctx) {
   const {
-    ref, site, org, host, path, isoNow, title, env,
+    ref, site, org, host, path, isoNow, title, env
   } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
