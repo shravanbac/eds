@@ -98,12 +98,15 @@ async function buildPayload(ctx) {
 
   const topDoc = window.top?.document;
 
-  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map(
-    (h) => ({
-      level: h.tagName,
-      text: h.textContent?.trim() || '',
-    })
-  );
+  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map((h) => ({
+    level: h.tagName,
+    text: h.textContent?.trim() || '',
+  }));
+
+  const viewport = {
+    width: window.top?.innerWidth || 0,
+    height: window.top?.innerHeight || 0,
+  };
 
   return {
     title,
@@ -126,10 +129,11 @@ async function buildPayload(ctx) {
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
-      viewport: { width: window.innerWidth, height: window.innerHeight },
+      viewport,
     },
   };
 }
+
 
 /** Post payload */
 async function postToWebhook(payload) {
