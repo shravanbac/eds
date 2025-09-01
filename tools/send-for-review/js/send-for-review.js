@@ -64,9 +64,9 @@ function resolveSubmitter() {
 
 /** Collect authored page context */
 function getContext() {
-  const host = window.top?.location?.host || '';
-  const path = window.top?.location?.pathname || '';
-  const title = window.top?.document?.title || '';
+  const host = document.referrer?.host || '';
+  const path = document.referrer?.pathname || '';
+  const title = document.referrer?.document?.title || '';
 
   let ref = '';
   let site = '';
