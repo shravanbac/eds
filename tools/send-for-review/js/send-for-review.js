@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 const DEFAULT_WEBHOOK =
   'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 const RETRY_INTERVAL_MS = 500;
@@ -190,7 +189,7 @@ function renderCard({ status, message, payload }) {
 
 /** Init */
 document.addEventListener('DOMContentLoaded', async () => {
-  renderCard({ status: 'loading', message: '⏳ Submitting review request…' });
+  renderCard({ status: 'loading', message: 'Submitting review request…' });
 
   try {
     const ctx = getContext();
@@ -205,8 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (err) {
     renderCard({
       status: 'error',
-      message: `❌ Request Failed: ${err.message}`,
+      message: `Request Failed: ${err.message}`,
     });
-    console.error(err);
   }
 });
