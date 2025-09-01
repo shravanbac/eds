@@ -1,13 +1,13 @@
-/* eslint-disable no-console */
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK =
+  'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
 function resolveWebhook() {
   return (
-    window.SFR_WEBHOOK_URL
-    || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim()
-    || DEFAULT_WEBHOOK
+    window.SFR_WEBHOOK_URL ||
+    document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() ||
+    DEFAULT_WEBHOOK
   );
 }
 
@@ -22,19 +22,20 @@ function extractEmail(text) {
 function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
-  // Search spans
-  const spans = root.querySelectorAll('span[slot="description"], span.description');
-  const email =
-    Array.from(spans)
-      .map((span) => extractEmail(span.textContent?.trim() || ''))
-      .find((val) => val) || null;
+  const spans = root.querySelectorAll(
+    'span[slot="description"], span.description'
+  );
+  for (const span of spans) {
+    const email = extractEmail(span.textContent?.trim() || '');
+    if (email) return email;
+  }
 
-  if (email) return email;
-
-  // Search shadow roots
-  const shadowHost = Array.from(root.querySelectorAll('*')).find((el) => el.shadowRoot);
-  if (shadowHost) return findUserEmail(shadowHost.shadowRoot);
-
+  for (const el of root.querySelectorAll('*')) {
+    if (el.shadowRoot) {
+      const found = findUserEmail(el.shadowRoot);
+      if (found) return found;
+    }
+  }
   return null;
 }
 
@@ -43,11 +44,8 @@ function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
       const email = findUserEmail();
-      if (email) {
-        resolve(email);
-      } else {
-        setTimeout(tryFind, RETRY_INTERVAL_MS);
-      }
+      if (email) resolve(email);
+      else setTimeout(tryFind, RETRY_INTERVAL_MS);
     };
     tryFind();
   });
@@ -59,9 +57,7 @@ function getContext() {
   const path = window.top?.location?.pathname || '';
   const title = window.top?.document?.title || '';
 
-  let ref = '';
-  let site = '';
-  let org = '';
+  let ref = '', site = '', org = '';
   const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (match) [, ref, site, org] = match;
 
@@ -81,36 +77,24 @@ function getContext() {
 
 /** Build full payload */
 async function buildPayload(ctx) {
-  const {
-    ref,
-    site,
-    org,
-    host,
-    path,
-    isoNow,
-    title,
-    env,
-  } = ctx;
-
+  const { ref, site, org, host, path, isoNow, title, env } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
   const name =
     (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
 
   const submittedBy = await resolveSubmitter();
 
-  // liveHost
-  let liveHost = host || 'localhost';
-  if (ref && site && org) {
-    liveHost = `${ref}--${site}--${org}.aem.live`;
-  } else if (host?.endsWith('.aem.page')) {
-    liveHost = host.replace('.aem.page', '.aem.live');
-  }
+  const liveHost =
+    ref && site && org
+      ? `${ref}--${site}--${org}.aem.live`
+      : host?.endsWith('.aem.page')
+      ? host.replace('.aem.page', '.aem.live')
+      : host || 'localhost';
 
-  // previewHost
-  let previewHost = host || 'localhost';
-  if (ref && site && org) {
-    previewHost = `${ref}--${site}--${org}.aem.page`;
-  }
+  const previewHost =
+    ref && site && org
+      ? `${ref}--${site}--${org}.aem.page`
+      : host || 'localhost';
 
   const topDoc = window.top?.document;
 
@@ -150,6 +134,7 @@ async function buildPayload(ctx) {
   };
 }
 
+
 /** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
@@ -175,8 +160,11 @@ async function postToWebhook(payload) {
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
 
-  const statusMap = { success: 'success', error: 'error' };
-  const statusClass = statusMap[status] || 'loading';
+  const statusClass = status === 'success'
+    ? 'success'
+    : status === 'error'
+    ? 'error'
+    : 'loading';
 
   const content =
     status === 'success' && payload
@@ -222,6 +210,5 @@ document.addEventListener('DOMContentLoaded', async () => {
       status: 'error',
       message: `Request Failed: ${err.message}`,
     });
-    console.error(err);
   }
 });
