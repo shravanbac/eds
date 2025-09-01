@@ -67,7 +67,7 @@ function getContext() {
   const refUrl = document.referrer ? new URL(document.referrer) : null;
   const host = refUrl?.host || '';
   const path = refUrl?.pathname || '';
-  const title = refUrl? '' : document.title;
+  const title = refUrl ? '' : document.title;
 
   let ref = '';
   let site = '';
