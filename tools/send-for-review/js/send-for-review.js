@@ -18,11 +18,9 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
-/** Recursively find user email (safe: only current document) */
+/** Find user email in current document (safe, no window.top) */
 function findUserEmail(root = document) {
   if (!root) return null;
-
-  // check description spans
   const spans = root.querySelectorAll(
     'span[slot="description"], span.description'
   );
@@ -33,7 +31,7 @@ function findUserEmail(root = document) {
   return null;
 }
 
-/** Resolve submitter */
+/** Resolve submitter email */
 function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
@@ -45,24 +43,25 @@ function resolveSubmitter() {
   });
 }
 
-/** Collect authored page context (safe with document.referrer) */
+/** Collect authored page context safely */
 function getContext() {
   const referrer = document.referrer || window.location.href;
-  const urlObj = new URL(referrer);
+  let urlObj;
+
+  try {
+    urlObj = new URL(referrer);
+  } catch (e) {
+    console.warn('Invalid referrer, falling back to window.location', e);
+    urlObj = new URL(window.location.href);
+  }
 
   const host = urlObj.host || '';
   const path = urlObj.pathname.replace(/^\/+/, '');
   const title = urlObj.pathname || 'Untitled Page';
 
-  let ref = '';
-  let site = '';
-  let org = '';
-
-  // Match DA.live host pattern: ref--site--org.aem.page/live
+  let ref = '', site = '', org = '';
   const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
-  if (match) {
-    [, ref, site, org] = match;
-  }
+  if (match) [, ref, site, org] = match;
 
   const env = host.includes('.aem.live') ? 'live' : 'page';
 
@@ -75,11 +74,11 @@ function getContext() {
     title,
     host,
     isoNow: new Date().toISOString(),
-    referrer,
+    referrer: urlObj.href,
   };
 }
 
-/** Build full payload */
+/** Build payload for webhook */
 async function buildPayload(ctx) {
   const { ref, site, org, host, path, isoNow, title, env, referrer } = ctx;
 
@@ -89,7 +88,6 @@ async function buildPayload(ctx) {
 
   const submittedBy = await resolveSubmitter();
 
-  // Build preview/live hosts based on referrer host
   const liveHost =
     ref && site && org
       ? `${ref}--${site}--${org}.aem.live`
@@ -102,7 +100,7 @@ async function buildPayload(ctx) {
 
   return {
     title,
-    url: referrer, // original authored page URL
+    url: referrer, // exact authored page URL
     name,
     publishedDate: isoNow,
     submittedBy,
@@ -117,7 +115,7 @@ async function buildPayload(ctx) {
     source: 'DA.live',
     lang: document.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
-    headings: [], // cannot read parent headings due to CORS
+    headings: [], // cannot grab parent headings due to CORS
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
@@ -129,7 +127,7 @@ async function buildPayload(ctx) {
   };
 }
 
-/** Post payload */
+/** Post payload to webhook */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
     method: 'POST',
@@ -151,11 +149,9 @@ async function postToWebhook(payload) {
 /** Render review card */
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
-  const statusMap = {
-    success: 'success',
-    error: 'error',
-  };
+  const statusMap = { success: 'success', error: 'error' };
   const statusClass = statusMap[status] || 'loading';
+
   const content =
     status === 'success' && payload
       ? `
@@ -170,6 +166,7 @@ function renderCard({ status, message, payload }) {
         </p>
       `
       : `<p class="status-message ${statusClass}">${message}</p>`;
+
   details.innerHTML = `
     <div id="review-card">
       <div class="header-bar">
@@ -180,19 +177,26 @@ function renderCard({ status, message, payload }) {
   `;
 }
 
-/** Init */
+/** Init flow */
 document.addEventListener('DOMContentLoaded', async () => {
   renderCard({ status: 'loading', message: 'Submitting review request…' });
   try {
     const ctx = getContext();
+    console.log('Context:', ctx);
+
     const payload = await buildPayload(ctx);
-    await postToWebhook(payload);
+    console.log('Payload:', payload);
+
+    const res = await postToWebhook(payload);
+    console.log('Webhook response:', res);
+
     renderCard({
       status: 'success',
       message: 'Review request submitted to Workfront.',
       payload,
     });
   } catch (err) {
+    console.error('Error submitting review:', err);
     renderCard({
       status: 'error',
       message: `Request Failed: ${err.message}`,
