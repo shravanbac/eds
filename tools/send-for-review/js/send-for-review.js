@@ -1,10 +1,13 @@
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK =
+  'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
 function resolveWebhook() {
   return (
-    window.SFR_WEBHOOK_URL || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() || DEFAULT_WEBHOOK
+    window.SFR_WEBHOOK_URL ||
+    document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() ||
+    DEFAULT_WEBHOOK
   );
 }
 
@@ -15,39 +18,19 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
-/** Recursively find user email from Sidekick shadowRoots */
-function findUserEmail(root = window.parent?.document || document) {
+/** Recursively find user email (safe: only current document) */
+function findUserEmail(root = document) {
   if (!root) return null;
 
   // check description spans
-  const spans = root.querySelectorAll('span[slot="description"], span.description');
-  let foundEmail = null;
-
-  Array.from(spans).some((span) => {
+  const spans = root.querySelectorAll(
+    'span[slot="description"], span.description'
+  );
+  for (const span of spans) {
     const email = extractEmail(span.textContent?.trim() || '');
-    if (email) {
-      foundEmail = email;
-      return true; // stop iteration
-    }
-    return false;
-  });
-
-  if (foundEmail) return foundEmail;
-
-  // recurse into shadowRoots
-  const elements = root.querySelectorAll('*');
-  Array.from(elements).some((el) => {
-    if (el.shadowRoot) {
-      const email = findUserEmail(el.shadowRoot);
-      if (email) {
-        foundEmail = email;
-        return true; // stop iteration
-      }
-    }
-    return false;
-  });
-
-  return foundEmail;
+    if (email) return email;
+  }
+  return null;
 }
 
 /** Resolve submitter */
@@ -62,11 +45,14 @@ function resolveSubmitter() {
   });
 }
 
-/** Collect authored page context (safe, no window.top) */
+/** Collect authored page context (safe with document.referrer) */
 function getContext() {
-  const host = window.location.host || '';
-  const path = window.location.pathname || '';
-  const title = document.title || '';
+  const referrer = document.referrer || window.location.href;
+  const urlObj = new URL(referrer);
+
+  const host = urlObj.host || '';
+  const path = urlObj.pathname.replace(/^\/+/, '');
+  const title = urlObj.pathname || 'Untitled Page';
 
   let ref = '';
   let site = '';
@@ -85,61 +71,44 @@ function getContext() {
     site,
     org,
     env,
-    path: path.replace(/^\//, ''),
+    path,
     title,
     host,
     isoNow: new Date().toISOString(),
+    referrer,
   };
 }
 
-/** Build full payload (safe for cross-origin) */
+/** Build full payload */
 async function buildPayload(ctx) {
-  const
-    {
-      ref, site, org, host, path, isoNow, title, env,
-    } = ctx;
+  const { ref, site, org, host, path, isoNow, title, env, referrer } = ctx;
 
-  const cleanPath = path.replace(/^\/+/, '');
-  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
+  const name =
+    (path.split('/').filter(Boolean).pop() || 'index')
+      .replace(/\.[^.]+$/, '') || 'index';
+
   const submittedBy = await resolveSubmitter();
 
-  // Build liveHost and previewHost
-  let liveHost;
-  if (ref && site && org) {
-    liveHost = `${ref}--${site}--${org}.aem.live`;
-  } else if (host?.endsWith('.aem.page')) {
-    liveHost = host.replace('.aem.page', '.aem.live');
-  } else {
-    liveHost = host || 'localhost';
-  }
+  // Build preview/live hosts based on referrer host
+  const liveHost =
+    ref && site && org
+      ? `${ref}--${site}--${org}.aem.live`
+      : host.endsWith('.aem.page')
+      ? host.replace('.aem.page', '.aem.live')
+      : host || 'localhost';
 
-  let previewHost;
-  if (ref && site && org) {
-    previewHost = `${ref}--${site}--${org}.aem.page`;
-  } else {
-    previewHost = host || 'localhost';
-  }
-
-  // Local document info (safe)
-  const headings = Array.from(document.querySelectorAll('h1, h2, h3')).map((h) => ({
-    level: h.tagName,
-    text: h.textContent?.trim() || '',
-  }));
-
-  const viewport = {
-    width: window.innerWidth || 0,
-    height: window.innerHeight || 0,
-  };
+  const previewHost =
+    ref && site && org ? `${ref}--${site}--${org}.aem.page` : host || 'localhost';
 
   return {
     title,
-    url: `https://${liveHost}/${cleanPath}`,
+    url: referrer, // original authored page URL
     name,
     publishedDate: isoNow,
     submittedBy,
-    path: `/${cleanPath}`,
-    previewUrl: `https://${previewHost}/${cleanPath}`,
-    liveUrl: `https://${liveHost}/${cleanPath}`,
+    path: `/${path}`,
+    previewUrl: `https://${previewHost}/${path}`,
+    liveUrl: `https://${liveHost}/${path}`,
     host,
     env,
     org,
@@ -148,11 +117,14 @@ async function buildPayload(ctx) {
     source: 'DA.live',
     lang: document.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
-    headings,
+    headings: [], // cannot read parent headings due to CORS
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
-      viewport,
+      viewport: {
+        width: window.innerWidth || 0,
+        height: window.innerHeight || 0,
+      },
     },
   };
 }
@@ -168,9 +140,7 @@ async function postToWebhook(payload) {
     mode: 'cors',
     body: JSON.stringify(payload),
   });
-
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-
   try {
     return await res.json();
   } catch {
@@ -181,15 +151,14 @@ async function postToWebhook(payload) {
 /** Render review card */
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
-
   const statusMap = {
     success: 'success',
     error: 'error',
   };
   const statusClass = statusMap[status] || 'loading';
-
-  const content = status === 'success' && payload
-    ? `
+  const content =
+    status === 'success' && payload
+      ? `
         <p class="status-message ${statusClass}">${message}</p>
         <p><strong>Page Title:</strong> ${payload.title}</p>
         <p><strong>Page Name:</strong> ${payload.name}</p>
@@ -200,8 +169,7 @@ function renderCard({ status, message, payload }) {
           </a>
         </p>
       `
-    : `<p class="status-message ${statusClass}">${message}</p>`;
-
+      : `<p class="status-message ${statusClass}">${message}</p>`;
   details.innerHTML = `
     <div id="review-card">
       <div class="header-bar">
@@ -215,12 +183,10 @@ function renderCard({ status, message, payload }) {
 /** Init */
 document.addEventListener('DOMContentLoaded', async () => {
   renderCard({ status: 'loading', message: 'Submitting review request…' });
-
   try {
     const ctx = getContext();
     const payload = await buildPayload(ctx);
     await postToWebhook(payload);
-
     renderCard({
       status: 'success',
       message: 'Review request submitted to Workfront.',
