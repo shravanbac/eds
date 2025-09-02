@@ -1,4 +1,4 @@
-const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
+const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
@@ -62,18 +62,21 @@ function resolveSubmitter() {
   });
 }
 
-/** Collect authored page context */
+/** Collect authored page context (safe, no window.top) */
 function getContext() {
-  const refUrl = document.referrer ? new URL(document.referrer) : null;
-  const host = refUrl?.host || '';
-  const path = refUrl?.pathname || '';
-  const title = refUrl ? '' : document.title;
+  const host = window.location.host || '';
+  const path = window.location.pathname || '';
+  const title = document.title || '';
 
   let ref = '';
   let site = '';
   let org = '';
+
+  // Match DA.live host pattern: ref--site--org.aem.page/live
   const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
-  if (match) [, ref, site, org] = match;
+  if (match) {
+    [, ref, site, org] = match;
+  }
 
   const env = host.includes('.aem.live') ? 'live' : 'page';
 
@@ -89,16 +92,18 @@ function getContext() {
   };
 }
 
-/** Build full payload */
+/** Build full payload (safe for cross-origin) */
 async function buildPayload(ctx) {
-  const {
-    ref, site, org, host, path, isoNow, title, env,
-  } = ctx;
+  const
+    {
+      ref, site, org, host, path, isoNow, title, env,
+    } = ctx;
+
   const cleanPath = path.replace(/^\/+/, '');
-  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
-    .replace(/\.[^.]+$/, '') || 'index';
+  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index').replace(/\.[^.]+$/, '') || 'index';
   const submittedBy = await resolveSubmitter();
 
+  // Build liveHost and previewHost
   let liveHost;
   if (ref && site && org) {
     liveHost = `${ref}--${site}--${org}.aem.live`;
@@ -115,16 +120,15 @@ async function buildPayload(ctx) {
     previewHost = host || 'localhost';
   }
 
-  const topDoc = window.top?.document;
-
-  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map((h) => ({
+  // Local document info (safe)
+  const headings = Array.from(document.querySelectorAll('h1, h2, h3')).map((h) => ({
     level: h.tagName,
     text: h.textContent?.trim() || '',
   }));
 
   const viewport = {
-    width: window.top?.innerWidth || 0,
-    height: window.top?.innerHeight || 0,
+    width: window.innerWidth || 0,
+    height: window.innerHeight || 0,
   };
 
   return {
@@ -142,7 +146,7 @@ async function buildPayload(ctx) {
     site,
     ref,
     source: 'DA.live',
-    lang: topDoc?.documentElement?.lang || undefined,
+    lang: document.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
     headings,
     analytics: {
