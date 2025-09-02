@@ -4,9 +4,7 @@ const RETRY_INTERVAL_MS = 500;
 /** Resolve webhook URL */
 function resolveWebhook() {
   return (
-    window.SFR_WEBHOOK_URL ||
-    document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() ||
-    DEFAULT_WEBHOOK
+    window.SFR_WEBHOOK_URL || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() || DEFAULT_WEBHOOK
   );
 }
 
@@ -17,16 +15,39 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
-/** Find user email in current document only (safe, no window.parent) */
-function findUserEmail(root = document) {
+/** Recursively find user email from Sidekick shadowRoots */
+function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
+  // check description spans
   const spans = root.querySelectorAll('span[slot="description"], span.description');
-  for (const span of spans) {
+  let foundEmail = null;
+
+  Array.from(spans).some((span) => {
     const email = extractEmail(span.textContent?.trim() || '');
-    if (email) return email;
-  }
-  return null;
+    if (email) {
+      foundEmail = email;
+      return true; // stop iteration
+    }
+    return false;
+  });
+
+  if (foundEmail) return foundEmail;
+
+  // recurse into shadowRoots
+  const elements = root.querySelectorAll('*');
+  Array.from(elements).some((el) => {
+    if (el.shadowRoot) {
+      const email = findUserEmail(el.shadowRoot);
+      if (email) {
+        foundEmail = email;
+        return true; // stop iteration
+      }
+    }
+    return false;
+  });
+
+  return foundEmail;
 }
 
 /** Resolve submitter */
@@ -70,13 +91,12 @@ function getContext() {
 
 /** Build full payload */
 async function buildPayload(ctx) {
-  const { ref, site, org, host, path, isoNow, title, env } = ctx;
-
+  const {
+    ref, site, org, host, path, isoNow, title, env,
+  } = ctx;
   const cleanPath = path.replace(/^\/+/, '');
-  const name =
-    (cleanPath.split('/').filter(Boolean).pop() || 'index')
-      .replace(/\.[^.]+$/, '') || 'index';
-
+  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
+    .replace(/\.[^.]+$/, '') || 'index';
   const submittedBy = await resolveSubmitter();
 
   let liveHost;
@@ -95,6 +115,18 @@ async function buildPayload(ctx) {
     previewHost = host || 'localhost';
   }
 
+  const topDoc = window.top?.document;
+
+  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map((h) => ({
+    level: h.tagName,
+    text: h.textContent?.trim() || '',
+  }));
+
+  const viewport = {
+    width: window.top?.innerWidth || 0,
+    height: window.top?.innerHeight || 0,
+  };
+
   return {
     title,
     url: `https://${liveHost}/${cleanPath}`,
@@ -110,16 +142,13 @@ async function buildPayload(ctx) {
     site,
     ref,
     source: 'DA.live',
-    lang: document.documentElement?.lang || undefined,
+    lang: topDoc?.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
-    headings: [], // no parent DOM access
+    headings,
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
-      viewport: {
-        width: window.innerWidth || 0,
-        height: window.innerHeight || 0,
-      },
+      viewport,
     },
   };
 }
@@ -145,16 +174,58 @@ async function postToWebhook(payload) {
   }
 }
 
-/** Main handler (sidekick calls this on button click) */
-export default async function sendForReview() {
+/** Render review card */
+function renderCard({ status, message, payload }) {
+  const details = document.getElementById('details');
+
+  const statusMap = {
+    success: 'success',
+    error: 'error',
+  };
+  const statusClass = statusMap[status] || 'loading';
+
+  const content = status === 'success' && payload
+    ? `
+        <p class="status-message ${statusClass}">${message}</p>
+        <p><strong>Page Title:</strong> ${payload.title}</p>
+        <p><strong>Page Name:</strong> ${payload.name}</p>
+        <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
+        <p><strong>Page Preview URL:</strong>
+          <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
+            ${payload.previewUrl}
+          </a>
+        </p>
+      `
+    : `<p class="status-message ${statusClass}">${message}</p>`;
+
+  details.innerHTML = `
+    <div id="review-card">
+      <div class="header-bar">
+        <img src="./assets/agilent-logo.png" alt="Agilent Logo" class="logo" />
+      </div>
+      <div class="content">${content}</div>
+    </div>
+  `;
+}
+
+/** Init */
+document.addEventListener('DOMContentLoaded', async () => {
+  renderCard({ status: 'loading', message: 'Submitting review request…' });
+
   try {
     const ctx = getContext();
     const payload = await buildPayload(ctx);
     await postToWebhook(payload);
 
-    alert("✅ Review request submitted to Workfront!");
+    renderCard({
+      status: 'success',
+      message: 'Review request submitted to Workfront.',
+      payload,
+    });
   } catch (err) {
-    console.error("Error submitting review:", err);
-    alert("❌ Failed to submit review: " + err.message);
+    renderCard({
+      status: 'error',
+      message: `Request Failed: ${err.message}`,
+    });
   }
-}
+});
