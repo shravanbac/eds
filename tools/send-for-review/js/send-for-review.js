@@ -1,13 +1,10 @@
-const DEFAULT_WEBHOOK =
-  'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
 function resolveWebhook() {
   return (
-    window.SFR_WEBHOOK_URL ||
-    document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() ||
-    DEFAULT_WEBHOOK
+    window.SFR_WEBHOOK_URL || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() || DEFAULT_WEBHOOK
   );
 }
 
@@ -18,20 +15,42 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
-/** Find user email in current document (safe, no window.top) */
-function findUserEmail(root = document) {
+/** Recursively find user email from Sidekick shadowRoots */
+function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
-  const spans = root.querySelectorAll(
-    'span[slot="description"], span.description'
-  );
-  for (const span of spans) {
+
+  // check description spans
+  const spans = root.querySelectorAll('span[slot="description"], span.description');
+  let foundEmail = null;
+
+  Array.from(spans).some((span) => {
     const email = extractEmail(span.textContent?.trim() || '');
-    if (email) return email;
-  }
-  return null;
+    if (email) {
+      foundEmail = email;
+      return true; // stop iteration
+    }
+    return false;
+  });
+
+  if (foundEmail) return foundEmail;
+
+  // recurse into shadowRoots
+  const elements = root.querySelectorAll('*');
+  Array.from(elements).some((el) => {
+    if (el.shadowRoot) {
+      const email = findUserEmail(el.shadowRoot);
+      if (email) {
+        foundEmail = email;
+        return true; // stop iteration
+      }
+    }
+    return false;
+  });
+
+  return foundEmail;
 }
 
-/** Resolve submitter email */
+/** Resolve submitter */
 function resolveSubmitter() {
   return new Promise((resolve) => {
     const tryFind = () => {
@@ -43,23 +62,16 @@ function resolveSubmitter() {
   });
 }
 
-/** Collect authored page context safely */
+/** Collect authored page context */
 function getContext() {
-  const referrer = document.referrer || window.location.href;
-  let urlObj;
+  const refUrl = document.referrer ? new URL(document.referrer) : null;
+  const host = refUrl?.host || '';
+  const path = refUrl?.pathname || '';
+  const title = refUrl ? '' : document.title;
 
-  try {
-    urlObj = new URL(referrer);
-  } catch (e) {
-    console.warn('Invalid referrer, falling back to window.location', e);
-    urlObj = new URL(window.location.href);
-  }
-
-  const host = urlObj.host || '';
-  const path = urlObj.pathname.replace(/^\/+/, '');
-  const title = urlObj.pathname || 'Untitled Page';
-
-  let ref = '', site = '', org = '';
+  let ref = '';
+  let site = '';
+  let org = '';
   const match = host.match(/^([^-]+)--([^-]+)--([^.]+)\.aem\.(page|live)$/);
   if (match) [, ref, site, org] = match;
 
@@ -70,64 +82,78 @@ function getContext() {
     site,
     org,
     env,
-    path,
+    path: path.replace(/^\//, ''),
     title,
     host,
     isoNow: new Date().toISOString(),
-    referrer: urlObj.href,
   };
 }
 
-/** Build payload for webhook */
+/** Build full payload */
 async function buildPayload(ctx) {
-  const { ref, site, org, host, path, isoNow, title, env, referrer } = ctx;
-
-  const name =
-    (path.split('/').filter(Boolean).pop() || 'index')
-      .replace(/\.[^.]+$/, '') || 'index';
-
+  const {
+    ref, site, org, host, path, isoNow, title, env,
+  } = ctx;
+  const cleanPath = path.replace(/^\/+/, '');
+  const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
+    .replace(/\.[^.]+$/, '') || 'index';
   const submittedBy = await resolveSubmitter();
 
-  const liveHost =
-    ref && site && org
-      ? `${ref}--${site}--${org}.aem.live`
-      : host.endsWith('.aem.page')
-      ? host.replace('.aem.page', '.aem.live')
-      : host || 'localhost';
+  let liveHost;
+  if (ref && site && org) {
+    liveHost = `${ref}--${site}--${org}.aem.live`;
+  } else if (host?.endsWith('.aem.page')) {
+    liveHost = host.replace('.aem.page', '.aem.live');
+  } else {
+    liveHost = host || 'localhost';
+  }
 
-  const previewHost =
-    ref && site && org ? `${ref}--${site}--${org}.aem.page` : host || 'localhost';
+  let previewHost;
+  if (ref && site && org) {
+    previewHost = `${ref}--${site}--${org}.aem.page`;
+  } else {
+    previewHost = host || 'localhost';
+  }
+
+  const topDoc = window.top?.document;
+
+  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map((h) => ({
+    level: h.tagName,
+    text: h.textContent?.trim() || '',
+  }));
+
+  const viewport = {
+    width: window.top?.innerWidth || 0,
+    height: window.top?.innerHeight || 0,
+  };
 
   return {
     title,
-    url: referrer, // exact authored page URL
+    url: `https://${liveHost}/${cleanPath}`,
     name,
     publishedDate: isoNow,
     submittedBy,
-    path: `/${path}`,
-    previewUrl: `https://${previewHost}/${path}`,
-    liveUrl: `https://${liveHost}/${path}`,
+    path: `/${cleanPath}`,
+    previewUrl: `https://${previewHost}/${cleanPath}`,
+    liveUrl: `https://${liveHost}/${cleanPath}`,
     host,
     env,
     org,
     site,
     ref,
     source: 'DA.live',
-    lang: document.documentElement?.lang || undefined,
+    lang: topDoc?.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
-    headings: [], // cannot grab parent headings due to CORS
+    headings,
     analytics: {
       userAgent: navigator.userAgent,
       timezoneOffset: new Date().getTimezoneOffset(),
-      viewport: {
-        width: window.innerWidth || 0,
-        height: window.innerHeight || 0,
-      },
+      viewport,
     },
   };
 }
 
-/** Post payload to webhook */
+/** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(resolveWebhook(), {
     method: 'POST',
@@ -138,7 +164,9 @@ async function postToWebhook(payload) {
     mode: 'cors',
     body: JSON.stringify(payload),
   });
+
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+
   try {
     return await res.json();
   } catch {
@@ -149,12 +177,15 @@ async function postToWebhook(payload) {
 /** Render review card */
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
-  const statusMap = { success: 'success', error: 'error' };
+
+  const statusMap = {
+    success: 'success',
+    error: 'error',
+  };
   const statusClass = statusMap[status] || 'loading';
 
-  const content =
-    status === 'success' && payload
-      ? `
+  const content = status === 'success' && payload
+    ? `
         <p class="status-message ${statusClass}">${message}</p>
         <p><strong>Page Title:</strong> ${payload.title}</p>
         <p><strong>Page Name:</strong> ${payload.name}</p>
@@ -165,7 +196,7 @@ function renderCard({ status, message, payload }) {
           </a>
         </p>
       `
-      : `<p class="status-message ${statusClass}">${message}</p>`;
+    : `<p class="status-message ${statusClass}">${message}</p>`;
 
   details.innerHTML = `
     <div id="review-card">
@@ -177,18 +208,14 @@ function renderCard({ status, message, payload }) {
   `;
 }
 
-/** Init flow */
+/** Init */
 document.addEventListener('DOMContentLoaded', async () => {
   renderCard({ status: 'loading', message: 'Submitting review request…' });
+
   try {
     const ctx = getContext();
-    console.log('Context:', ctx);
-
     const payload = await buildPayload(ctx);
-    console.log('Payload:', payload);
-
-    const res = await postToWebhook(payload);
-    console.log('Webhook response:', res);
+    await postToWebhook(payload);
 
     renderCard({
       status: 'success',
@@ -196,7 +223,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       payload,
     });
   } catch (err) {
-    console.error('Error submitting review:', err);
     renderCard({
       status: 'error',
       message: `Request Failed: ${err.message}`,
