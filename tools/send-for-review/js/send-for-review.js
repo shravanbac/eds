@@ -1,9 +1,21 @@
 const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 
-/** Inject listener into parent page (if not already there) */
+/** Inject listener into parent page */
 function injectParentListener() {
   try {
-    window.top.postMessage({ type: 'INJECT_LISTENER' }, '*');
+    const script = document.createElement('script');
+    script.textContent = `
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'GET_PAGE_URL') {
+          event.source.postMessage(
+            { type: 'PAGE_URL', url: window.location.href },
+            '*'
+          );
+        }
+      });
+    `;
+    window.top.document.head.appendChild(script);
+    console.log('DEBUG: Parent listener injected');
   } catch (e) {
     console.warn('Unable to inject parent listener', e);
   }
@@ -73,7 +85,7 @@ function render(message, status = 'info') {
 document.addEventListener('DOMContentLoaded', async () => {
   render('Submitting review request…', 'loading');
 
-  // inject the listener into parent
+  // Inject listener into parent so it can answer with page URL
   injectParentListener();
 
   try {
@@ -84,17 +96,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await postToWebhook(payload);
 
-    render(`Review request submitted. Page: ${pageName} (${pageUrl})`, 'success');
+    render(
+      `Review request submitted. Page: ${pageName} (${pageUrl})`,
+      'success',
+    );
   } catch (err) {
     render(`Request Failed: ${err.message}`, 'error');
   }
 });
-
-/** --- Parent page listener (auto-injected) --- */
-if (window === window.top) {
-  window.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'GET_PAGE_URL') {
-      event.source.postMessage({ type: 'PAGE_URL', url: window.location.href }, event.origin);
-    }
-  });
-}
