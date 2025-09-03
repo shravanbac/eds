@@ -1,20 +1,39 @@
 const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 
-/** Get page info safely from Sidekick config */
 function getPageInfo() {
   const sk = window.hlx?.sidekick?.config || {};
-  const url = sk.referrer || document.referrer || '';
-  let pageName = 'index';
+  console.log('DEBUG Sidekick config:', sk);
+  console.log('DEBUG document.referrer:', document.referrer);
 
+  let url = '';
+
+  // 1. Use Sidekick referrer if available
+  if (sk.referrer) {
+    url = sk.referrer;
+  } else if (document.referrer) {
+    // 2. Fallback to browser referrer
+    url = document.referrer;
+  } else if (sk.host && sk.ref && sk.repo && sk.owner) {
+    // 3. Try constructing from Sidekick repo info
+    url = `https://${sk.ref}--${sk.repo}--${sk.owner}.${sk.host}/`;
+  }
+
+  // Default if nothing found
+  if (!url) {
+    url = 'https://localhost/';
+  }
+
+  // Derive page name
+  let pageName = 'index';
   try {
-    if (url) {
-      const u = new URL(url);
-      const path = u.pathname.replace(/^\/+/, '');
+    const u = new URL(url);
+    const path = u.pathname.replace(/^\/+/, '');
+    if (path) {
       pageName = (path.split('/').filter(Boolean).pop() || 'index')
         .replace(/\.[^.]+$/, '') || 'index';
     }
-  } catch {
-    // fallback: keep pageName as 'index'
+  } catch (e) {
+    console.warn('Page name extraction failed', e);
   }
 
   return {
@@ -23,7 +42,7 @@ function getPageInfo() {
   };
 }
 
-/** Post payload to webhook */
+/** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(DEFAULT_WEBHOOK, {
     method: 'POST',
@@ -39,7 +58,7 @@ async function postToWebhook(payload) {
   return res.json().catch(() => ({}));
 }
 
-/** Render status */
+/** Render status in panel */
 function render(message, status = 'info') {
   const details = document.getElementById('details');
   details.innerHTML = `
@@ -56,6 +75,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const { pageUrl, pageName } = getPageInfo();
     const payload = { pageUrl, pageName };
+
+    console.log('DEBUG payload to webhook:', payload);
 
     await postToWebhook(payload);
 
