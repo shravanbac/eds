@@ -1,45 +1,46 @@
 const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 
-function getPageInfo() {
-  const sk = window.hlx?.sidekick?.config || {};
-  console.log('DEBUG Sidekick config:', sk);
-  console.log('DEBUG document.referrer:', document.referrer);
-
-  let url = '';
-
-  // 1. Use Sidekick referrer if available
-  if (sk.referrer) {
-    url = sk.referrer;
-  } else if (document.referrer) {
-    // 2. Fallback to browser referrer
-    url = document.referrer;
-  } else if (sk.host && sk.ref && sk.repo && sk.owner) {
-    // 3. Try constructing from Sidekick repo info
-    url = `https://${sk.ref}--${sk.repo}--${sk.owner}.${sk.host}/`;
-  }
-
-  // Default if nothing found
-  if (!url) {
-    url = 'https://localhost/';
-  }
-
-  // Derive page name
-  let pageName = 'index';
+/** Inject listener into parent page (if not already there) */
+function injectParentListener() {
   try {
-    const u = new URL(url);
-    const path = u.pathname.replace(/^\/+/, '');
-    if (path) {
-      pageName = (path.split('/').filter(Boolean).pop() || 'index')
-        .replace(/\.[^.]+$/, '') || 'index';
-    }
+    window.top.postMessage({ type: 'INJECT_LISTENER' }, '*');
   } catch (e) {
-    console.warn('Page name extraction failed', e);
+    console.warn('Unable to inject parent listener', e);
   }
+}
 
-  return {
-    pageUrl: url,
-    pageName,
-  };
+/** Get page info using postMessage */
+function getPageInfo() {
+  return new Promise((resolve) => {
+    // Step 1: ask parent for its URL
+    window.top.postMessage({ type: 'GET_PAGE_URL' }, '*');
+
+    function handleMessage(event) {
+      if (event.data && event.data.type === 'PAGE_URL') {
+        window.removeEventListener('message', handleMessage);
+
+        const url = event.data.url || document.referrer || '';
+        let pageName = 'index';
+
+        try {
+          if (url) {
+            const u = new URL(url);
+            const path = u.pathname.replace(/^\/+/, '');
+            if (path) {
+              pageName = (path.split('/').filter(Boolean).pop() || 'index')
+                .replace(/\.[^.]+$/, '') || 'index';
+            }
+          }
+        } catch (e) {
+          console.warn('Page name extraction failed', e);
+        }
+
+        resolve({ pageUrl: url, pageName });
+      }
+    }
+
+    window.addEventListener('message', handleMessage);
+  });
 }
 
 /** Post payload */
@@ -58,7 +59,7 @@ async function postToWebhook(payload) {
   return res.json().catch(() => ({}));
 }
 
-/** Render status in panel */
+/** Render status */
 function render(message, status = 'info') {
   const details = document.getElementById('details');
   details.innerHTML = `
@@ -72,8 +73,11 @@ function render(message, status = 'info') {
 document.addEventListener('DOMContentLoaded', async () => {
   render('Submitting review request…', 'loading');
 
+  // inject the listener into parent
+  injectParentListener();
+
   try {
-    const { pageUrl, pageName } = getPageInfo();
+    const { pageUrl, pageName } = await getPageInfo();
     const payload = { pageUrl, pageName };
 
     console.log('DEBUG payload to webhook:', payload);
@@ -85,3 +89,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     render(`Request Failed: ${err.message}`, 'error');
   }
 });
+
+/** --- Parent page listener (auto-injected) --- */
+if (window === window.top) {
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'GET_PAGE_URL') {
+      event.source.postMessage({ type: 'PAGE_URL', url: window.location.href }, event.origin);
+    }
+  });
+}
