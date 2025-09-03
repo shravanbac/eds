@@ -1,10 +1,20 @@
 const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 
-/** Get page info (CORS-safe, uses referrer only) */
 function getPageInfo() {
-  const url = document.referrer || '';
-  let pageName = 'index';
+  let url = '';
 
+  // 1. First, check query string param (Helix usually passes referrer in ?referrer=…)
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('referrer')) {
+    url = params.get('referrer');
+  }
+
+  // 2. Otherwise, fallback to document.referrer
+  if (!url && document.referrer) {
+    url = document.referrer;
+  }
+
+  let pageName = 'index';
   try {
     if (url) {
       const u = new URL(url);
@@ -21,33 +31,22 @@ function getPageInfo() {
   return { pageUrl: url, pageName };
 }
 
-/** Post payload */
 async function postToWebhook(payload) {
   const res = await fetch(DEFAULT_WEBHOOK, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
+    headers: { 'content-type': 'application/json' },
     mode: 'cors',
     body: JSON.stringify(payload),
   });
-
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json().catch(() => ({}));
 }
 
-/** Render status */
 function render(message, status = 'info') {
   const details = document.getElementById('details');
-  details.innerHTML = `
-    <div id="review-card">
-      <p class="${status}">${message}</p>
-    </div>
-  `;
+  details.innerHTML = `<p class="${status}">${message}</p>`;
 }
 
-/** Init */
 document.addEventListener('DOMContentLoaded', async () => {
   render('Submitting review request…', 'loading');
 
@@ -56,7 +55,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const payload = { pageUrl, pageName };
 
     console.log('DEBUG payload to webhook:', payload);
-
     await postToWebhook(payload);
 
     render(
