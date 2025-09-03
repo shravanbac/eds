@@ -1,18 +1,25 @@
 const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
 
-/** Derive page name from referrer URL */
-function getPageName() {
-  const refUrl = document.referrer ? new URL(document.referrer) : null;
-  const path = refUrl?.pathname || '';
-  const cleanPath = path.replace(/^\/+/, '');
-  return (cleanPath.split('/').filter(Boolean).pop() || 'index')
-    .replace(/\.[^.]+$/, '') || 'index';
-}
+/** Get page info safely from Sidekick config */
+function getPageInfo() {
+  const sk = window.hlx?.sidekick?.config || {};
+  const url = sk.referrer || document.referrer || '';
+  let pageName = 'index';
 
-/** Build payload with only page name */
-function buildPayload() {
+  try {
+    if (url) {
+      const u = new URL(url);
+      const path = u.pathname.replace(/^\/+/, '');
+      pageName = (path.split('/').filter(Boolean).pop() || 'index')
+        .replace(/\.[^.]+$/, '') || 'index';
+    }
+  } catch {
+    // fallback: keep pageName as 'index'
+  }
+
   return {
-    pageName: getPageName(),
+    pageUrl: url,
+    pageName,
   };
 }
 
@@ -28,21 +35,16 @@ async function postToWebhook(payload) {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-  }
-
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
   return res.json().catch(() => ({}));
 }
 
-/** Render status in panel */
+/** Render status */
 function render(message, status = 'info') {
   const details = document.getElementById('details');
   details.innerHTML = `
     <div id="review-card">
-      <div class="header-bar">
-        <strong>Status:</strong> <span class="${status}">${message}</span>
-      </div>
+      <p class="${status}">${message}</p>
     </div>
   `;
 }
@@ -52,9 +54,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   render('Submitting review request…', 'loading');
 
   try {
-    const payload = buildPayload();
+    const { pageUrl, pageName } = getPageInfo();
+    const payload = { pageUrl, pageName };
+
     await postToWebhook(payload);
-    render(`Review request submitted. Page Name: ${payload.pageName}`, 'success');
+
+    render(`Review request submitted. Page: ${pageName} (${pageUrl})`, 'success');
   } catch (err) {
     render(`Request Failed: ${err.message}`, 'error');
   }
