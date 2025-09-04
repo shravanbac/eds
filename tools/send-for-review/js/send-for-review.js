@@ -1,33 +1,30 @@
 /* eslint-disable no-console */
 (function main() {
-  async function getPageInfo() {
+  function getPageInfo() {
     let url = '';
-
-    try {
-      // Prefer referrer because iframe opens in sidekick
-      if (document.referrer) {
-        url = document.referrer;
-      } else if (window.parent && window.parent.location) {
-        url = window.parent.location.href;
-      } else {
-        url = window.location.href;
-      }
-    } catch (e) {
-      console.warn('Page URL extraction failed, falling back to location.href', e);
-      url = window.location.href;
-    }
-
-    // Default pageName
     let pageName = 'index';
+
     try {
-      const u = new URL(url);
-      const path = u.pathname.replace(/^\/+/, '');
-      if (path) {
-        pageName = (path.split('/').filter(Boolean).pop() || 'index')
-          .replace(/\.[^.]+$/, '') || 'index';
+      const params = new URLSearchParams(window.location.search);
+      const previewHost = params.get('previewHost');
+      const path = params.get('path');
+
+      if (previewHost && path) {
+        url = `https://${previewHost}${path}`;
+        pageName = path.split('/').filter(Boolean).pop() || 'index';
+      } else {
+        // fallback: try referrer
+        url = document.referrer || window.location.href;
+        const u = new URL(url);
+        const p = u.pathname.replace(/^\/+/, '');
+        if (p) {
+          pageName = (p.split('/').filter(Boolean).pop() || 'index')
+            .replace(/\.[^.]+$/, '') || 'index';
+        }
       }
     } catch (e) {
-      console.warn('Page name extraction failed', e);
+      console.warn('Page info extraction failed, fallback to location.href', e);
+      url = window.location.href;
     }
 
     return { pageUrl: url, pageName };
@@ -52,16 +49,14 @@
   function renderMessage(msg, success = true) {
     const details = document.getElementById('details');
     if (details) {
-      details.innerHTML = `<div class="review-card"><p class="status ${
-        success ? 'success' : 'error'
-      }">${msg}</p></div>`;
+      details.innerHTML = `<div class="review-card"><p class="status ${success ? 'success' : 'error'}">${msg}</p></div>`;
     }
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
     renderMessage('Submitting review request...', true);
 
-    const info = await getPageInfo();
+    const info = getPageInfo();
     const payload = { pageUrl: info.pageUrl, pageName: info.pageName };
 
     console.debug('DEBUG payload to webhook:', payload);
@@ -69,11 +64,7 @@
     const ok = await sendToWebhook(payload);
     if (ok) {
       renderMessage(
-        `Review request submitted. Page: ${
-          info.pageName
-        } (${
-          info.pageUrl
-        })`,
+        `Review request submitted. Page: ${info.pageName} (${info.pageUrl})`,
         true,
       );
     } else {
