@@ -1,67 +1,72 @@
-const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+// send-for-review.js
 
 function getPageInfo() {
-  let url = '';
-
-  // 1. First, check query string param (Helix usually passes referrer in ?referrer=…)
+  // 1. From ?referrer=${referrer}
   const params = new URLSearchParams(window.location.search);
-  if (params.get('referrer')) {
-    url = params.get('referrer');
-  }
+  let url = params.get('referrer');
 
-  // 2. Otherwise, fallback to document.referrer
-  if (!url && document.referrer) {
-    url = document.referrer;
+  // 2. Fallback to document.referrer
+  if (!url) {
+    url = document.referrer || '';
   }
 
   let pageName = 'index';
-  try {
-    if (url) {
+  if (url) {
+    try {
       const u = new URL(url);
       const path = u.pathname.replace(/^\/+/, '');
       if (path) {
         pageName = (path.split('/').filter(Boolean).pop() || 'index')
           .replace(/\.[^.]+$/, '') || 'index';
       }
+    } catch (e) {
+      console.warn('Invalid URL in referrer:', url);
     }
-  } catch (e) {
-    console.warn('Page name extraction failed', e);
   }
 
   return { pageUrl: url, pageName };
 }
 
-async function postToWebhook(payload) {
-  const res = await fetch(DEFAULT_WEBHOOK, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    mode: 'cors',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json().catch(() => ({}));
-}
-
-function render(message, status = 'info') {
+async function sendForReview() {
   const details = document.getElementById('details');
-  details.innerHTML = `<p class="${status}">${message}</p>`;
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-  render('Submitting review request…', 'loading');
+  details.innerHTML = '<p class="loading">Submitting review request…</p>';
 
   try {
     const { pageUrl, pageName } = getPageInfo();
-    const payload = { pageUrl, pageName };
+
+    const payload = {
+      pageUrl,
+      pageName,
+    };
 
     console.log('DEBUG payload to webhook:', payload);
-    await postToWebhook(payload);
 
-    render(
-      `Review request submitted. Page: ${pageName} (${pageUrl})`,
-      'success',
-    );
-  } catch (err) {
-    render(`Request Failed: ${err.message}`, 'error');
+    // 🔗 Replace this with your actual webhook endpoint
+    const webhook = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
+
+    const res = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Webhook returned ${res.status}`);
+    }
+
+    details.innerHTML = `
+      <p class="success">
+        Review request submitted. Page: <b>${pageName}</b><br/>
+        (<a href="${pageUrl}" target="_blank">${pageUrl}</a>)
+      </p>
+    `;
+  } catch (e) {
+    console.error('Send For Review failed:', e);
+    details.innerHTML = `<p class="error">Request failed: ${e.message}</p>`;
   }
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  sendForReview();
 });
