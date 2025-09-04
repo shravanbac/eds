@@ -1,13 +1,23 @@
 // send-for-review.js
 
+// Inject minimal styles for loading / success / error
+(function injectStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .loading { color: #666; font-style: italic; }
+    .success { color: green; font-weight: bold; }
+    .error { color: red; font-weight: bold; }
+  `;
+  document.head.appendChild(style);
+}());
+
 function getPageInfo() {
-  // 1. From ?referrer=${referrer}
   const params = new URLSearchParams(window.location.search);
   let url = params.get('referrer');
 
-  // 2. Fallback to document.referrer
-  if (!url) {
-    url = document.referrer || '';
+  // If Sidekick passed a literal "${referrer}", treat as missing
+  if (!url || url.includes('$referrer')) {
+    url = document.referrer || (window.parent && window.parent.location && window.parent.location.href) || '';
   }
 
   let pageName = 'index';
@@ -20,7 +30,7 @@ function getPageInfo() {
           .replace(/\.[^.]+$/, '') || 'index';
       }
     } catch (e) {
-      console.warn('Invalid URL in referrer:', url);
+      console.warn('Page name extraction failed', e);
     }
   }
 
@@ -34,14 +44,10 @@ async function sendForReview() {
   try {
     const { pageUrl, pageName } = getPageInfo();
 
-    const payload = {
-      pageUrl,
-      pageName,
-    };
-
+    const payload = { pageUrl, pageName };
     console.log('DEBUG payload to webhook:', payload);
 
-    // 🔗 Replace this with your actual webhook endpoint
+    // 🔗 Replace with your actual webhook URL
     const webhook = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 
     const res = await fetch(webhook, {
@@ -56,7 +62,8 @@ async function sendForReview() {
 
     details.innerHTML = `
       <p class="success">
-        Review request submitted. Page: <b>${pageName}</b><br/>
+        Review request submitted.<br/>
+        Page: <b>${pageName}</b><br/>
         (<a href="${pageUrl}" target="_blank">${pageUrl}</a>)
       </p>
     `;
