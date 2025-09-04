@@ -1,21 +1,21 @@
 /* eslint-disable no-console */
 (function main() {
   function getPageInfo() {
-    let url = document.referrer || window.location.href;
-    let pageName = 'index';
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get('pageUrl') || document.referrer || window.location.href;
 
+    let pageName = 'index';
     try {
       const u = new URL(url);
       const segments = u.pathname.split('/').filter(Boolean);
       if (segments.length > 0) {
         pageName = segments.pop().replace(/\.[^.]+$/, '') || 'index';
       }
-      url = u.href;
+      return { pageUrl: u.href, pageName };
     } catch (e) {
       console.warn('Page info extraction failed', e);
+      return { pageUrl: url, pageName };
     }
-
-    return { pageUrl: url, pageName };
   }
 
   async function sendToWebhook(payload) {
@@ -44,18 +44,14 @@
   document.addEventListener('DOMContentLoaded', async () => {
     renderMessage('Submitting review request...', true);
 
-    const info = getPageInfo();
-    const payload = { pageUrl: info.pageUrl, pageName: info.pageName };
+    const { pageUrl, pageName } = getPageInfo();
+    const payload = { pageUrl, pageName };
 
-    console.debug('DEBUG referrer:', document.referrer);
     console.debug('DEBUG payload to webhook:', payload);
 
     const ok = await sendToWebhook(payload);
     if (ok) {
-      renderMessage(
-        `Review request submitted. Page: ${info.pageName} (${info.pageUrl})`,
-        true,
-      );
+      renderMessage(`Review request submitted. Page: ${pageName} (${pageUrl})`, true);
     } else {
       renderMessage('Review request failed. Please try again.', false);
     }
