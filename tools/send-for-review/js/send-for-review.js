@@ -2,15 +2,15 @@
 (function main() {
   async function getPageInfo() {
     let url = '';
-    try {
-      // Try parent frame first
-      if (window.parent && window.parent.location) {
-        url = window.parent.location.href;
-      }
 
-      // Fallback to document.referrer
-      if (!url || url.indexOf('{referrer}') !== -1) {
-        url = document.referrer || window.location.href;
+    try {
+      // Prefer referrer because iframe opens in sidekick
+      if (document.referrer) {
+        url = document.referrer;
+      } else if (window.parent && window.parent.location) {
+        url = window.parent.location.href;
+      } else {
+        url = window.location.href;
       }
     } catch (e) {
       console.warn('Page URL extraction failed, falling back to location.href', e);
