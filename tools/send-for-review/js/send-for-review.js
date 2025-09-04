@@ -1,30 +1,18 @@
 /* eslint-disable no-console */
 (function main() {
   function getPageInfo() {
-    let url = '';
+    let url = document.referrer || window.location.href;
     let pageName = 'index';
 
     try {
-      const params = new URLSearchParams(window.location.search);
-      const previewHost = params.get('previewHost');
-      const path = params.get('path');
-
-      if (previewHost && path) {
-        url = `https://${previewHost}${path}`;
-        pageName = path.split('/').filter(Boolean).pop() || 'index';
-      } else {
-        // fallback: try referrer
-        url = document.referrer || window.location.href;
-        const u = new URL(url);
-        const p = u.pathname.replace(/^\/+/, '');
-        if (p) {
-          pageName = (p.split('/').filter(Boolean).pop() || 'index')
-            .replace(/\.[^.]+$/, '') || 'index';
-        }
+      const u = new URL(url);
+      const segments = u.pathname.split('/').filter(Boolean);
+      if (segments.length > 0) {
+        pageName = segments.pop().replace(/\.[^.]+$/, '') || 'index';
       }
+      url = u.href;
     } catch (e) {
-      console.warn('Page info extraction failed, fallback to location.href', e);
-      url = window.location.href;
+      console.warn('Page info extraction failed', e);
     }
 
     return { pageUrl: url, pageName };
@@ -59,6 +47,7 @@
     const info = getPageInfo();
     const payload = { pageUrl: info.pageUrl, pageName: info.pageName };
 
+    console.debug('DEBUG referrer:', document.referrer);
     console.debug('DEBUG payload to webhook:', payload);
 
     const ok = await sendToWebhook(payload);
