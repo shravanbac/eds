@@ -1,6 +1,5 @@
 // send-for-review.js
 
-// Inject minimal styles for loading / success / error
 (function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
@@ -15,23 +14,23 @@ function getPageInfo() {
   const params = new URLSearchParams(window.location.search);
   let url = params.get('referrer');
 
-  // If Sidekick passed a literal "${referrer}", treat as missing
-  if (!url || url.includes('$referrer')) {
-    url = document.referrer || (window.parent && window.parent.location && window.parent.location.href) || '';
+  // If Sidekick didn't substitute the referrer, treat it as missing
+  if (!url || url.indexOf('{referrer}') !== -1 || url.indexOf('referrer') !== -1) {
+    url = document.referrer
+      || (window.parent && window.parent.location && window.parent.location.href)
+      || window.location.href;
   }
 
   let pageName = 'index';
-  if (url) {
-    try {
-      const u = new URL(url);
-      const path = u.pathname.replace(/^\/+/, '');
-      if (path) {
-        pageName = (path.split('/').filter(Boolean).pop() || 'index')
-          .replace(/\.[^.]+$/, '') || 'index';
-      }
-    } catch (e) {
-      console.warn('Page name extraction failed', e);
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/^\/+/, '');
+    if (path) {
+      pageName = (path.split('/').filter(Boolean).pop() || 'index')
+        .replace(/\.[^.]+$/, '') || 'index';
     }
+  } catch (e) {
+    // Ignore invalid URL parsing
   }
 
   return { pageUrl: url, pageName };
@@ -43,11 +42,9 @@ async function sendForReview() {
 
   try {
     const { pageUrl, pageName } = getPageInfo();
-
     const payload = { pageUrl, pageName };
-    console.log('DEBUG payload to webhook:', payload);
 
-    // 🔗 Replace with your actual webhook URL
+    // 🔗 Replace with your actual webhook
     const webhook = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 
     const res = await fetch(webhook, {
@@ -60,20 +57,18 @@ async function sendForReview() {
       throw new Error(`Webhook returned ${res.status}`);
     }
 
-    details.innerHTML = `
-      <p class="success">
-        Review request submitted.<br/>
-        Page: <b>${pageName}</b><br/>
-        (<a href="${pageUrl}" target="_blank">${pageUrl}</a>)
-      </p>
-    `;
+    details.innerHTML = (
+      '<p class="success">'
+        + 'Review request submitted.<br/>'
+        + `Page: <b>${pageName}</b><br/>`
+        + `(<a href="${pageUrl}" target="_blank">${pageUrl}</a>)`
+      + '</p>'
+    );
   } catch (e) {
-    console.error('Send For Review failed:', e);
     details.innerHTML = `<p class="error">Request failed: ${e.message}</p>`;
   }
 }
 
-// Init
 document.addEventListener('DOMContentLoaded', () => {
   sendForReview();
 });
