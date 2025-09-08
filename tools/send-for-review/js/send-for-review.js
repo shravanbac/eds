@@ -17,11 +17,10 @@ function extractEmail(text) {
   return match ? match[0] : null;
 }
 
-/** Recursively find user email from Sidekick shadowRoots */
+/** Recursively find user email from Sidekick */
 function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
-  // check description spans
   const spans = root.querySelectorAll(
     'span[slot="description"], span.description',
   );
@@ -31,21 +30,20 @@ function findUserEmail(root = window.parent?.document || document) {
     const email = extractEmail(span.textContent?.trim() || '');
     if (email) {
       foundEmail = email;
-      return true; // stop iteration
+      return true;
     }
     return false;
   });
 
   if (foundEmail) return foundEmail;
 
-  // recurse into shadowRoots
   const elements = root.querySelectorAll('*');
   Array.from(elements).some((el) => {
     if (el.shadowRoot) {
       const email = findUserEmail(el.shadowRoot);
       if (email) {
         foundEmail = email;
-        return true; // stop iteration
+        return true;
       }
     }
     return false;
@@ -107,7 +105,7 @@ async function buildPayload(ctx) {
     ref, site, org, host, isoNow, env, refUrl,
   } = ctx;
 
-  // ✅ Always prefer referrer path, fallback to iframe path
+  // Always prefer referrer path, fallback to iframe path
   const refPath = refUrl?.pathname || window.location.pathname || '';
   const cleanPath = refPath.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
@@ -125,7 +123,6 @@ async function buildPayload(ctx) {
 
   const topDoc = window.top?.document;
 
-  // ✅ Page title with fallbacks
   const pageTitle = topDoc?.title
     || topDoc?.querySelector('meta[property="og:title"]')?.content
     || topDoc?.querySelector('meta[name="title"]')?.content
@@ -141,7 +138,6 @@ async function buildPayload(ctx) {
 
   const metaDescription = topDoc?.querySelector('meta[name="description"]')?.content || '';
 
-  // ✅ Safer viewport capture with fallback
   const viewport = {
     width:
       window.top === window
@@ -159,7 +155,7 @@ async function buildPayload(ctx) {
     name,
     publishedDate: isoNow,
     submittedBy,
-    path: cleanPath ? `/${cleanPath}` : '/', // ✅ always pass a path
+    path: cleanPath ? `/${cleanPath}` : '/',
     previewUrl: `https://${previewHost}/${cleanPath}`,
     liveUrl: `https://${liveHost}/${cleanPath}`,
     host,
@@ -221,13 +217,11 @@ function renderCard({ status, message, payload }) {
         <p><strong>Page Title:</strong> ${payload.title}</p>
         <p><strong>Page Name:</strong> ${payload.name}</p>
         <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
-        <p><strong>Page Path:</strong> ${payload.path}</p>
         <p><strong>Page Preview URL:</strong>
           <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
             ${payload.previewUrl}
           </a>
         </p>
-        <p><strong>Meta Description:</strong> ${payload.metaDescription}</p>
       `
     : `<p class="status-message ${statusClass}">${message}</p>`;
 
