@@ -1,10 +1,12 @@
-const DEFAULT_WEBHOOK = 'https://hook.fusion.adobe.com/3o5lrlkstfbbrspi35hh0y3cmjkk4gdd';
+const DEFAULT_WEBHOOK = 'https://hook.us2.make.com/6wpuu9mtglv89lsj6acwd8tvbgrfbnko';
 const RETRY_INTERVAL_MS = 500;
 
 /** Resolve webhook URL */
 function resolveWebhook() {
   return (
-    window.SFR_WEBHOOK_URL || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim() || DEFAULT_WEBHOOK
+    window.SFR_WEBHOOK_URL
+    || document.querySelector('meta[name="sfr:webhook"]')?.content?.trim()
+    || DEFAULT_WEBHOOK
   );
 }
 
@@ -20,7 +22,9 @@ function findUserEmail(root = window.parent?.document || document) {
   if (!root) return null;
 
   // check description spans
-  const spans = root.querySelectorAll('span[slot="description"], span.description');
+  const spans = root.querySelectorAll(
+    'span[slot="description"], span.description',
+  );
   let foundEmail = null;
 
   Array.from(spans).some((span) => {
@@ -51,12 +55,21 @@ function findUserEmail(root = window.parent?.document || document) {
 }
 
 /** Resolve submitter */
-function resolveSubmitter() {
+function resolveSubmitter(maxAttempts = 20) {
   return new Promise((resolve) => {
+    let attempts = 0;
     const tryFind = () => {
       const email = findUserEmail();
-      if (email) resolve(email);
-      else setTimeout(tryFind, RETRY_INTERVAL_MS);
+      if (email) {
+        resolve(email);
+      } else {
+        attempts += 1;
+        if (attempts >= maxAttempts) {
+          resolve('anonymous');
+        } else {
+          setTimeout(tryFind, RETRY_INTERVAL_MS);
+        }
+      }
     };
     tryFind();
   });
@@ -66,8 +79,7 @@ function resolveSubmitter() {
 function getContext() {
   const refUrl = document.referrer ? new URL(document.referrer) : null;
   const host = refUrl?.host || '';
-  const path = refUrl?.pathname || '';
-  const title = refUrl ? '' : document.title;
+  const path = refUrl?.pathname || window.location.pathname || '';
 
   let ref = '';
   let site = '';
@@ -82,58 +94,72 @@ function getContext() {
     site,
     org,
     env,
-    path: path.replace(/^\//, ''),
-    title,
+    path,
     host,
     isoNow: new Date().toISOString(),
+    refUrl,
   };
 }
 
 /** Build full payload */
 async function buildPayload(ctx) {
   const {
-    ref, site, org, host, path, isoNow, title, env,
+    ref, site, org, host, isoNow, env, refUrl,
   } = ctx;
-  const cleanPath = path.replace(/^\/+/, '');
+
+  // ✅ Always prefer referrer path, fallback to iframe path
+  const refPath = refUrl?.pathname || window.location.pathname || '';
+  const cleanPath = refPath.replace(/^\/+/, '');
   const name = (cleanPath.split('/').filter(Boolean).pop() || 'index')
     .replace(/\.[^.]+$/, '') || 'index';
   const submittedBy = await resolveSubmitter();
 
-  let liveHost;
+  let liveHost = host;
+  let previewHost = host;
   if (ref && site && org) {
     liveHost = `${ref}--${site}--${org}.aem.live`;
+    previewHost = `${ref}--${site}--${org}.aem.page`;
   } else if (host?.endsWith('.aem.page')) {
     liveHost = host.replace('.aem.page', '.aem.live');
-  } else {
-    liveHost = host || 'localhost';
-  }
-
-  let previewHost;
-  if (ref && site && org) {
-    previewHost = `${ref}--${site}--${org}.aem.page`;
-  } else {
-    previewHost = host || 'localhost';
   }
 
   const topDoc = window.top?.document;
 
-  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map((h) => ({
-    level: h.tagName,
-    text: h.textContent?.trim() || '',
-  }));
+  // ✅ Page title with fallbacks
+  const pageTitle = topDoc?.title
+    || topDoc?.querySelector('meta[property="og:title"]')?.content
+    || topDoc?.querySelector('meta[name="title"]')?.content
+    || document.title
+    || '';
 
+  const headings = Array.from(topDoc?.querySelectorAll('h1, h2, h3') || []).map(
+    (h) => ({
+      level: h.tagName,
+      text: h.textContent?.trim() || '',
+    }),
+  );
+
+  const metaDescription = topDoc?.querySelector('meta[name="description"]')?.content || '';
+
+  // ✅ Safer viewport capture with fallback
   const viewport = {
-    width: window.top?.innerWidth || 0,
-    height: window.top?.innerHeight || 0,
+    width:
+      window.top === window
+        ? window.innerWidth
+        : (window.top?.innerWidth || window.innerWidth),
+    height:
+      window.top === window
+        ? window.innerHeight
+        : (window.top?.innerHeight || window.innerHeight),
   };
 
   return {
-    title,
+    title: pageTitle,
     url: `https://${liveHost}/${cleanPath}`,
     name,
     publishedDate: isoNow,
     submittedBy,
-    path: `/${cleanPath}`,
+    path: cleanPath ? `/${cleanPath}` : '/', // ✅ always pass a path
     previewUrl: `https://${previewHost}/${cleanPath}`,
     liveUrl: `https://${liveHost}/${cleanPath}`,
     host,
@@ -144,6 +170,7 @@ async function buildPayload(ctx) {
     source: 'DA.live',
     lang: topDoc?.documentElement?.lang || undefined,
     locale: navigator.language || undefined,
+    metaDescription,
     headings,
     analytics: {
       userAgent: navigator.userAgent,
@@ -165,11 +192,14 @@ async function postToWebhook(payload) {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
 
   try {
-    return await res.json();
-  } catch {
+    return JSON.parse(text);
+  } catch (err) {
+    /* eslint-disable-next-line no-console */
+    console.warn('Response not JSON:', text);
     return {};
   }
 }
@@ -177,6 +207,7 @@ async function postToWebhook(payload) {
 /** Render review card */
 function renderCard({ status, message, payload }) {
   const details = document.getElementById('details');
+  if (!details) return;
 
   const statusMap = {
     success: 'success',
@@ -190,11 +221,13 @@ function renderCard({ status, message, payload }) {
         <p><strong>Page Title:</strong> ${payload.title}</p>
         <p><strong>Page Name:</strong> ${payload.name}</p>
         <p><strong>Submitter Email:</strong> ${payload.submittedBy}</p>
+        <p><strong>Page Path:</strong> ${payload.path}</p>
         <p><strong>Page Preview URL:</strong>
           <a href="${payload.previewUrl}" target="_blank" rel="noopener noreferrer">
             ${payload.previewUrl}
           </a>
         </p>
+        <p><strong>Meta Description:</strong> ${payload.metaDescription}</p>
       `
     : `<p class="status-message ${statusClass}">${message}</p>`;
 
