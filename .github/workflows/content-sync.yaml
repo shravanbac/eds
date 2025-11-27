@@ -1,0 +1,24 @@
+name: Content Sync from DA.live
+
+on:
+  workflow_dispatch:  # Manual trigger from GitHub UI
+  
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Log DA.live customizations
+        run: |
+          echo "DA.live Publishing Workflow Triggered"
+          echo "Source: https://github.com/shravanbac/da-live"
+          echo "Target: https://github.com/shravanbac/eds"
+          
+      - name: Set up AEM CLI
+        run: npm install -g @adobe/aem-cli
+        
+      - name: Trigger site rebuild
+        run: |
+          echo "Content from DA.live is now live on EDS"
+          echo "Visit: https://main--eds--shravanbac.aem.live/"

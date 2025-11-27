@@ -1,0 +1,123 @@
+:host {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 0 0 120px;
+}
+
+.editor-wrapper {
+  --editor-btn-bg-color: #EFEFEF;
+  --editor-btn-bg-color-hover: #e9e9e9;
+
+  position: relative;
+  flex: 0 1 auto;
+  width: var(--grid-container-width);
+}
+
+da-editor {
+  position: relative;
+  z-index: 1;
+}
+
+da-version {
+  display: none;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 2;
+}
+
+da-preview,
+da-versions {
+  visibility: hidden;
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  justify-self: right;
+
+  &.is-visible {
+    visibility: unset;
+    position: relative;
+    width: unset;
+    height: unset;
+    overflow: unset;
+  }
+}
+
+.da-editor-tabs {
+  display: none;
+  position: absolute;
+  top: 20px;
+  right: -56px;
+}
+
+.da-editor-tabs-full {
+  padding: 6px;
+  border-radius: 4px;
+  box-shadow: rgb(181 181 181) 0 0 5px 0;
+  background: rgb(255 255 255);
+  box-sizing: border-box;
+}
+
+.da-editor-tabs-quiet {
+  padding: 6px;
+}
+
+.da-editor-tab {
+  display: block;
+  width: 50px;
+  height: 44px;
+  text-indent: -1000px;
+  overflow: hidden;
+  border-radius: 2px;
+  border: none;
+  cursor: pointer;
+}
+
+.da-editor-tab.show-preview {
+  background: url("/blocks/edit/img/S2_icon_DeviceDesktopMobile_20_N.svg") center center / 20px no-repeat rgb(239 239 239);
+}
+
+.da-editor-tab.show-versions {
+  background: url("/blocks/edit/img/S2_icon_Calendar_20_N.svg") center center / 20px no-repeat;
+}
+
+.da-editor-tab.open-ue {
+  background: url("/blocks/edit/img/S2_icon_OpenIn_20_N.svg") center center / 20px no-repeat;
+}
+
+.da-preview-menuitem.show-preview:hover {
+  background-color: var(--editor-btn-bg-color-hover) !important;
+}
+
+@media (min-width: 600px) {
+  :host {
+    padding: 0 80px;
+  }
+
+  .editor-wrapper {
+    min-width: 375px;
+  }
+
+  .da-editor-tabs {
+    display: unset;
+
+    &.show-pane {
+      display: none;
+    }
+  }
+}
+
+@media (min-width: 900px) {
+  .editor-wrapper {
+    flex: 0 1 800px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .editor-wrapper {
+    flex: 0 1 900px;
+  }
+}
