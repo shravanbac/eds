@@ -1,4 +1,7 @@
 mountpoints:
   /:
-    url: https://content.da.live/shravanbac/eds/
-    type: markup
+    url: https://github.com/shravanbac/eds/tree/main
+    type: git
+  /blocks/edit:
+    url: https://github.com/shravanbac/da-live/tree/main/blocks/edit
+    type: git
